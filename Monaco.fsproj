@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{1597F645-AE13-4F01-B3AC-D90BD2EA6B09}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Monaco</RootNamespace>
+    <AssemblyName>Monaco</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\Debug</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <ConsolePause>false</ConsolePause>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <OutputPath>bin\Release</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <ConsolePause>false</ConsolePause>
+    <CustomCommands>
+      <CustomCommands>
+        <Command type="AfterBuild" command="cp /home/sjors/Projects/Internship/Monaco/bin/Release/Monaco.dll /home/sjors/Projects/Internship/Stacks/Assets/Framework/Monaco.dll" />
+      </CustomCommands>
+    </CustomCommands>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="mscorlib">
+      <HintPath>mscorlib.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Core">
+      <HintPath>FSharp.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>UnityEngine.UI.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>UnityEngine.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Coroutine.fs" />
+    <Compile Include="Helpers.fs" />
+    <Compile Include="Lens.fs" />
+    <Compile Include="Model.fs" />
+    <Compile Include="Communications.fs" />
+    <Compile Include="Player.fs" />
+    <Compile Include="UIActivities.fs" />
+    <Compile Include="Logic.fs" />
+    <Compile Include="Script.fsx" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.1\Framework\v4.0\Microsoft.FSharp.Targets" />
+</Project>
