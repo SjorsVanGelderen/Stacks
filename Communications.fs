@@ -30,10 +30,20 @@ type Mailbox =
     static member Send mailbox id mails =
         let contents' = 
             match mailbox.Contents.TryFind id with
-            | Some existingMails ->  mailbox.Contents.Add (id, List.fold (fun acc mail -> mail :: acc) existingMails mails)
+            | Some existingMails ->  mailbox.Contents.Add (id, mails @ existingMails)
             | None -> mailbox.Contents.Add (id, mails)
         { mailbox with Contents = contents' }
-        
+
+    static member SendUnique mailbox id mails =
+        let contents' =
+            match mailbox.Contents.TryFind id with
+            | Some existingMails ->
+                let uniqueMails =
+                    List.filter (fun mail -> not <| List.exists (fun otherMail -> mail = otherMail) existingMails) mails
+                mailbox.Contents.Add (id, uniqueMails @ existingMails)
+            | None -> mailbox.Contents.Add (id, mails)
+        { mailbox with Contents = contents' }
+
     static member Zero =
         { Contents = Map.empty }
     

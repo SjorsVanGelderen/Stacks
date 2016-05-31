@@ -4,6 +4,7 @@
 
 namespace Monaco
 
+open System
 open UnityEngine
 open Coroutine
 open Helpers
@@ -18,6 +19,10 @@ type MonacoLogic () =
     [<SerializeField>]
     let mutable activitiesController =
         Unchecked.defaultof<MonacoUIActivitiesController>
+
+    [<SerializeField>]
+    let mutable playerController =
+        Unchecked.defaultof<MonacoPlayerController>
 
     let mutable requestsUI : Mail List = [] //UI mails to be captured by the state
     let mutable state = State.Zero //The base game state
@@ -45,7 +50,7 @@ type MonacoLogic () =
     member this.Update () =
         try
             //Add the activity request mails
-            do state <- { state with Mailbox = Mailbox.Send state.Mailbox 0 requestsUI }
+            do state <- { state with Mailbox = Mailbox.SendUnique state.Mailbox 0 requestsUI }
             requestsUI <- [] //Clear the processed UI requests
 
             //Update the state as usual
@@ -69,6 +74,7 @@ type MonacoLogic () =
     member this.UpdateUI () =
         this.UpdateActivities ()
         this.RemoveActivities ()
+        this.UpdatePlayer ()
     
     member this.ActivityRequest (request : string) =
         if request.Contains ("pause_") then
@@ -88,7 +94,7 @@ type MonacoLogic () =
         match activitiesController with 
         | null -> Debug.LogError ("Failed to access activities controller!")
         | _ ->
-            List.iter (fun activity ->
+            List.iter (fun (activity : Activity) ->
                 activitiesController.UpdateActivity activity.Fields.Name
                     (normalize activity.Fields.ElapsedTime 0.0 activity.Fields.Duration)) state.Activities
         
@@ -108,6 +114,18 @@ type MonacoLogic () =
 
             do state <- { state with Mailbox = { state.Mailbox with Contents = Map.add 0 mails' state.Mailbox.Contents } }
         | None -> ()
+
+    member this.UpdatePlayer () =
+        try
+            if playerController = null then
+                Debug.LogError ("Failed to access player controller!")
+            else
+                playerController.SetHealth (state.Player.Fields.State.Health)
+                playerController.SetEnergy (state.Player.Fields.State.Energy)
+                playerController.SetFinancial (state.Player.Fields.State.Financial)
+                playerController.SetBrand (state.Player.Fields.State.Brand)
+        with
+            | ex -> Debug.LogError (ex.Message)
 
 //Global game object container
 and Entity<'w, 'fs, 'mailbox> =
@@ -148,18 +166,20 @@ and PlayerFields =
 
         let mailRoutine =
             co { do! yield_
+                 let! (fs : PlayerFields) = getInnerState_
                  let! mailbox = getOuterState_
                  let mails = GetMailList 0 mailbox
-                 let mails' =
-                    List.filter (fun e ->
-                        match e with
-                        | AffectFinancial _
-                        | AffectHealth _
-                        | AffectEnergy _
-                        | AffectBrand _
-                        | AffectExpertise _
-                        | AffectSkills _ -> false
-                        | _ -> true) mails
+                 let state', mails' =
+                    List.fold (fun ((state : PlayerState), mails) mail ->
+                        match mail with
+                        | AffectHealth change    -> ({ state with Health    = System.Math.Max(0, state.Health    + change) }, mails)
+                        | AffectEnergy change    -> ({ state with Energy    = System.Math.Max(0, state.Energy    + change) }, mails)
+                        | AffectFinancial change -> ({ state with Financial = System.Math.Max(0, state.Financial + change) }, mails)
+                        | AffectBrand change     -> ({ state with Brand     = System.Math.Max(0, state.Brand     + change) }, mails)
+                        | AffectExpertise _      -> (state, mails)
+                        | AffectSkills _         -> (state, mails)
+                        | _ -> (state, mail :: mails)) (fs.State, []) mails
+                 do! setInnerState_ { fs with State = state' }
                  let mailbox' = { mailbox with Contents = Map.add 0 mails' mailbox.Contents }
                  do! setOuterState_ mailbox' } |> repeat_
 
@@ -179,41 +199,41 @@ and ActivityFields =
       Paused      : bool } with 
       
     static member Zero =
-        { ID          = -1;
-          Name        = "";
+        { ID          = -1
+          Name        = ""
           Effects     = List.empty
-          ElapsedTime = 0.0;
-          Duration    = 1.0;
-          Paused      = false; }
+          ElapsedTime = 0.0
+          Duration    = 1.0
+          Paused      = false }
           
     static member Music =
-        { ID          = -1;
-          Name        = "music";
+        { ID          = -1
+          Name        = "music"
           Effects     = [ AffectHealth -1
                           AffectBrand 10
                           AffectFinancial 10 ]
-          ElapsedTime = 0.0;
-          Duration    = 10.0;
-          Paused      = false; }
+          ElapsedTime = 0.0
+          Duration    = 10.0
+          Paused      = false }
           
     static member Game =
-        { ID          = -1;
-          Name        = "game";
+        { ID          = -1
+          Name        = "game"
           Effects     = [ AffectHealth 10
                           AffectBrand -5
                           AffectFinancial -10 ]
-          ElapsedTime = 0.0;
-          Duration    = 5.0;
-          Paused      = false; }
+          ElapsedTime = 0.0
+          Duration    = 5.0
+          Paused      = false }
           
     static member Paint =
-        { ID          = -1;
-          Name        = "paint";
+        { ID          = -1
+          Name        = "paint"
           Effects     = [ AffectHealth 5
                           AffectBrand 15
                           AffectFinancial 3 ]
-          ElapsedTime = 0.0;
-          Duration    = 3.0;
+          ElapsedTime = 0.0
+          Duration    = 3.0
           Paused      = false; }
           
     static member Rules =
@@ -234,9 +254,9 @@ and ActivityFields =
         let filterMail mailList activityName =
             List.filter (fun mail ->
                 match mail with 
-                | AddActivity name
+                | AddActivity    name
                 | RemoveActivity name
-                | PauseActivity name
+                | PauseActivity  name
                 | RemoveActivity name -> name <> activityName
                 | _ -> true) mailList
         
@@ -251,7 +271,7 @@ and ActivityFields =
                  do! setInnerState_ fs''
                  
                  let mailList' = filterMail mailList fs.Name
-                 let mailbox' = Mailbox.Send mailbox 0 mailList'
+                 let mailbox' = { mailbox with Contents = mailbox.Contents.Add (0, mailList') }
                  do! setOuterState_ mailbox'
                  
                  do! yield_ } |> repeat_
@@ -265,9 +285,10 @@ and ActivityFields =
                  if fs.ElapsedTime < fs.Duration then
                      if not fs.Paused then
                         if fs.ElapsedTime + 0.1 >= fs.Duration then
-                            //let mailbox' = Mailbox.Send mailbox 0 [ (RemoveActivity fs.Name) ]
-                            let mailbox' = Mailbox.Send mailbox 0 <| (RemoveActivity fs.Name) :: fs.Effects
-                            do! setOuterState_ mailbox'
+                            Debug.Log (fs.Effects)
+                            let mailbox'  = Mailbox.SendUnique mailbox 0 [ RemoveActivity fs.Name ]
+                            let mailbox'' = Mailbox.Send mailbox' 0 fs.Effects
+                            do! setOuterState_ mailbox''
                             do! setInnerState_ { fs with ElapsedTime = fs.Duration }
                         else
                             do! setInnerState_ { fs with ElapsedTime = fs.ElapsedTime + 0.1 } } |> repeat_
@@ -289,14 +310,67 @@ and ActivityFields =
     static member paused =
         { Get = fun (x : ActivityFields) -> x.Paused
           Set = fun v (x : ActivityFields) -> {x with Paused = v} }
- 
-and Player   = Entity<State, PlayerFields, Mailbox>
+
+//Used to track the progress of events
+and EventFields =
+    { ID          : int
+      Name        : string
+      Description : string
+      Effects     : Mail List
+      Activity    : Activity Option
+      Duration    : double } with 
+      
+    static member Zero =
+        { ID          = -1
+          Name        = ""
+          Description = ""
+          Effects     = List.empty
+          Activity    = None
+          Duration    = 1.0 }
+          
+    static member RecordDeal =
+        { ID          = -1
+          Name        = ""
+          Description = ""
+          Effects     = List.empty
+          Activity    = None
+          Duration    = 1.0 }
+    
+    static member Rules =
+        [ fun w fs dt -> fs ]
+        
+    static member Scripts =
+        [ co { do! yield_ } |> repeat_ ]
+        
+    static member name =
+        { Get = fun (x : EventFields) -> x.Name
+          Set = fun v (x : EventFields) -> {x with Name = v} }
+          
+    static member description =
+        { Get = fun (x : EventFields) -> x.Description
+          Set = fun v (x : EventFields) -> {x with Description = v} }
+          
+    static member effects =
+        { Get = fun (x : EventFields) -> x.Effects
+          Set = fun v (x : EventFields) -> {x with Effects = v} }
+          
+    static member activity =
+        { Get = fun (x : EventFields) -> x.Activity
+          Set = fun v (x : EventFields) -> {x with Activity = v} }
+          
+    static member duration =
+        { Get = fun (x : EventFields) -> x.Duration
+          Set = fun v (x : EventFields) -> {x with Duration = v} }
+
+and Player   = Entity<State, PlayerFields,   Mailbox>
 and Activity = Entity<State, ActivityFields, Mailbox>
+and Event    = Entity<State, EventFields,    Mailbox>
  
 //The global game state
 and State =
     { Player     : Player
       Activities : Activity List
+      Events     : Event List
       Mailbox    : Mailbox
       ExitFlag   : bool
       Prefabs    : Map<string, GameObject> } with
@@ -304,6 +378,7 @@ and State =
     static member Zero =
         { Player     = Player.Create(PlayerFields.Zero, PlayerFields.Rules, PlayerFields.Scripts)
           Activities = List.empty
+          Events     = List.empty
           Mailbox    = Mailbox.Zero
           ExitFlag   = false
           Prefabs    = Map.empty }
@@ -323,8 +398,12 @@ and State =
              List.fold (fun (activities, mailbox) (activity : Activity) ->
                 let activity', mailbox' = activity.Update (s, mailbox, dt)
                 (activity' :: activities, mailbox')) (List.empty, s.Mailbox) s.Activities
-        { s with Activities = activities'
-                 Mailbox    = mailbox' }
+                
+        let player', mailbox'' = s.Player.Update (s, mailbox', dt)
+        
+        { s with Player     = player'
+                 Activities = activities'
+                 Mailbox    = mailbox'' }
     
     static member EmptyMailbox s =
         { s with Mailbox = Mailbox.Zero }
@@ -333,9 +412,9 @@ and State =
     static member Emerge s =
         let getFields name =
             match name with
-            | "music" -> Debug.Log ("Adding music"); Some ActivityFields.Music
-            | "game"  -> Debug.Log ("Adding game"); Some ActivityFields.Game
-            | "paint" -> Debug.Log ("Adding paint"); Some ActivityFields.Paint
+            | "music" -> Some ActivityFields.Music
+            | "game"  -> Some ActivityFields.Game
+            | "paint" -> Some ActivityFields.Paint
             | _ -> Debug.LogError ("Failed to find activity fields for " + name + "!"); None
         
         let getAdditions =

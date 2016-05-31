@@ -21,7 +21,7 @@
     <ConsolePause>false</ConsolePause>
     <CustomCommands>
       <CustomCommands>
-        <Command type="AfterBuild" command="cp /home/sjors/Projects/Internship/Monaco/bin/Release/Monaco.dll /home/sjors/Projects/Internship/Stacks/Assets/Framework/Monaco.dll" />
+        <Command type="AfterBuild" command="cp &quot;/home/sjors/Projects/Internship/Stacks/bin/Release/Monaco.dll&quot; &quot;/home/sjors/Projects/Internship/Stacks Unity/Assets/Framework/Monaco.dll&quot;" />
       </CustomCommands>
     </CustomCommands>
   </PropertyGroup>

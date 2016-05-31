@@ -10,18 +10,19 @@ open UnityEngine.UI
 //This controller manages the collection of activity UI elements
 [<AllowNullLiteralAttribute>]
 type MonacoUIActivitiesController () =
-    inherit MonoBehaviour ()    
+    inherit MonoBehaviour ()
+     
     [<SerializeField>]
     let mutable playerController = Unchecked.defaultof<MonacoPlayerController>
     
     [<SerializeField>]
-    let mutable prefabMusic = Unchecked.defaultof<GameObject>
+    let mutable prefabMusic      = Unchecked.defaultof<GameObject>
 
     [<SerializeField>]
-    let mutable prefabGame  = Unchecked.defaultof<GameObject>
+    let mutable prefabGame       = Unchecked.defaultof<GameObject>
 
     [<SerializeField>]
-    let mutable prefabPaint = Unchecked.defaultof<GameObject>
+    let mutable prefabPaint      = Unchecked.defaultof<GameObject>
     
     let mutable pieSprites = Unchecked.defaultof<Sprite List>
     
@@ -33,7 +34,7 @@ type MonacoUIActivitiesController () =
         let prefab =
             match name with 
             | "music" -> if prefabMusic = null then None else Some prefabMusic
-            | "game"  -> if prefabGame = null then None else Some prefabGame
+            | "game"  -> if prefabGame  = null then None else Some prefabGame
             | "paint" -> if prefabPaint = null then None else Some prefabPaint
             | _ -> Debug.LogError ("Failed to add unknown activity " + name + "!"); None
         
