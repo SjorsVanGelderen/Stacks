@@ -5,6 +5,7 @@
 namespace Monaco
 
 open System
+open System.Globalization
 open UnityEngine
 open Coroutine
 open Helpers
@@ -12,145 +13,149 @@ open Lens
 open Communications
 open Model
 
+type ActivityProgressDict = System.Collections.Generic.IDictionary<int, float32>
+
 //Core game logic component
 type MonacoLogic () =
     inherit MonoBehaviour ()
     
     [<SerializeField>]
-    let mutable activitiesController =
-        Unchecked.defaultof<MonacoUIActivitiesController>
-
-    [<SerializeField>]
-    let mutable playerController =
-        Unchecked.defaultof<MonacoPlayerController>
-
-    let mutable requestsUI : Mail List = [] //UI mails to be captured by the state
-    let mutable state = State.Zero //The base game state
+    let mutable uiController : MonacoUIController = Unchecked.defaultof<MonacoUIController> //Base UI controller
     
-    //Loads prefabs from the resources folder into the state as a list of game objects
-    member this.LoadPrefabs filenames =
-        let attemptLoad =
-            fun acc filename ->
-                let gameObject = Resources.Load<GameObject> ("Prefabs/" + filename)
-                match gameObject with
-                | null -> Debug.LogError ("Failed to load prefab " + filename); acc
-                | _ -> (filename, gameObject) :: acc
-
-        List.fold attemptLoad List.empty filenames |> Map.ofList
+    let mutable requestsUI : Mail List = [] //UI mails to be captured by the state
+    let mutable state : State = State.Zero  //The base game state
 
     member this.Start () =
-        try            
-            do state <- State.Initialize state
-        
-            let prefabFilenames = []
-            do state <- State.SetPrefabs state (this.LoadPrefabs prefabFilenames)
-        with
-            | ex -> Debug.LogError (ex.Message)
+        do state <- state |> State.Initialize
+
+        //Process any startup entities here
 
     member this.Update () =
-        try
-            //Add the activity request mails
-            do state <- { state with Mailbox = Mailbox.SendUnique state.Mailbox 0 requestsUI }
-            requestsUI <- [] //Clear the processed UI requests
+        //Capture UI requests in the state before updating
+        do state <- { state with Mailbox = Mailbox.SendUnique state.Mailbox 0 requestsUI }
+        requestsUI <- [] //Clear the processed UI requests
 
-            //Update the state as usual
-            do state <- State.Update Time.deltaTime state
+        do state <- State.Update Time.deltaTime state
+        //this.UpdateUI ()
 
-            //Update progress of the state in UI elements
-            this.UpdateUI ()
-            
-            if state.ExitFlag then
-                state <- State.Terminate state
-                Application.Quit ()
-        with
-            | ex -> Debug.LogError (ex.Message)
-    
-    member this.Quit () =
-        try
-            do state <- { state with ExitFlag = true }
-        with
-            | ex -> Debug.LogError (ex.Message)
-    
+        if state.ExitFlag then
+            state <- State.Terminate state
+            Application.Quit ()
+
     member this.UpdateUI () =
-        this.UpdateActivities ()
-        this.RemoveActivities ()
-        this.UpdatePlayer ()
-    
-    member this.ActivityRequest (request : string) =
-        if request.Contains ("pause_") then
-            requestsUI <- (PauseActivity (request.Substring(6, request.Length))) :: requestsUI
-        else if request.Contains ("resume_") then
-            requestsUI <- (ResumeActivity (request.Substring(7, request.Length))) :: requestsUI
-        else
-            if not <| List.exists (fun (e : Activity) ->
-                e.Fields.Name = request) state.Activities then
-                requestsUI <- (AddActivity request) :: requestsUI
-                
-                match activitiesController with 
-                | null -> Debug.LogError ("Failed to find activities controller!")
-                | _ -> activitiesController.AddActivity request
-        
-    member this.UpdateActivities () =
-        match activitiesController with 
-        | null -> Debug.LogError ("Failed to access activities controller!")
-        | _ ->
-            List.iter (fun (activity : Activity) ->
-                activitiesController.UpdateActivity activity.Fields.Name
-                    (normalize activity.Fields.ElapsedTime 0.0 activity.Fields.Duration)) state.Activities
-        
-    member this.RemoveActivities removals =
-        let mails () = state.Mailbox.Contents.TryFind 0
-        match mails () with 
-        | Some mails ->
-            let removals, mails' =
-                List.fold (fun (removals, mails) mail ->
-                    match mail with
-                    | RemoveActivity name -> (name :: removals), mails
-                    | _ -> (removals, mail :: mails)) ([], []) mails
+        match uiController with
+        | null -> Debug.LogError ("Failed to access UI controller!")
+        | _    ->
+            uiController.UpdateDaySlider state.Timer.Fields.DateTime.Hour
+
+            let getProgress (startDate, endDate) =
+                let currentDate : DateTime = state.Timer.Fields.DateTime
+                if currentDate > startDate && currentDate < endDate then
+                    double currentDate.Hour / 24.0
+                else
+                    0.0
             
-            match activitiesController with 
-            | null -> Debug.LogError ("Failed to access activities controller!")
-            | _ -> List.iter (fun activity -> activitiesController.RemoveActivity activity) removals
+            let activityProgressMap =
+                List.fold (fun (map : Map<string, double>) (activity : Activity) ->
+                    let progress = getProgress activity.Fields.Schedule
+                    match activity.Fields.Kind with
+                    | ActivityType.Human     -> map.Add ("human",     progress)
+                    | ActivityType.Social    -> map.Add ("social",    progress)
+                    | ActivityType.Financial -> map.Add ("financial", progress)
+                    | ActivityType.Job       -> map.Add ("job",       progress)
+                    | _                      -> map) Map.empty state.Activities
+            
+            uiController.UpdateActivities activityProgressMap
 
-            do state <- { state with Mailbox = { state.Mailbox with Contents = Map.add 0 mails' state.Mailbox.Contents } }
-        | None -> ()
+    member this.UIRequest (request : string) =
+        //Translate string request to mail
+        match request with
+        | "pause"  -> requestsUI <- GlobalPause  :: requestsUI
+        | "resume" -> requestsUI <- GlobalResume :: requestsUI
+        | _        -> Debug.LogError("Failed to process UI request!")
 
-    member this.UpdatePlayer () =
-        try
-            if playerController = null then
-                Debug.LogError ("Failed to access player controller!")
-            else
-                playerController.SetHealth (state.Player.Fields.State.Health)
-                playerController.SetEnergy (state.Player.Fields.State.Energy)
-                playerController.SetFinancial (state.Player.Fields.State.Financial)
-                playerController.SetBrand (state.Player.Fields.State.Brand)
-        with
-            | ex -> Debug.LogError (ex.Message)
+    member this.Quit () =
+        do state <- { state with ExitFlag = true }
 
-//Global game object container
+    member this.QueryActivityProgress () : ActivityProgressDict =
+        List.fold (fun acc elem -> (elem.Fields.ID, float32 <| random.NextDouble() ) :: acc) [] state.Activities
+            |> Map.ofList |> Map.toSeq |> dict
+
+    member this.QueryDayTime () =
+        state.Timer.Fields.DateTime.Hour
+
+//Global entity structure
 and Entity<'w, 'fs, 'mailbox> =
     { Fields  : 'fs
       Rules   : List<'w -> 'fs -> float32 -> 'fs>
       Scripts : Coroutine<'w, 'mailbox, 'fs, unit> } with
-      
+
     static member Create (fields, rules, scripts) =
         { Fields  = fields
           Rules   = rules
           Scripts = andPassMany_ scripts }
 
     member this.Update (world, mailbox, dt) =
-        let fsRules = this.Rules |> List.fold (fun fs rule -> rule world fs dt) this.Fields
+        let fsRules = List.fold (fun fs rule -> rule world fs dt) this.Fields this.Rules
         let mailbox', fsScripts, scripts' = step_ (this.Scripts world mailbox fsRules)
-        { this with
-              Fields  = fsScripts
-              Rules   = this.Rules
-              Scripts = scripts' }, mailbox'
+        { this with Fields  = fsScripts
+                    Rules   = this.Rules
+                    Scripts = scripts' }, mailbox'
+
+//Used to keep track of game time data
+and TimerFields =
+    { ID       : int
+      DateTime : DateTime } with
+
+    static member Zero =
+        { ID       = -1
+          DateTime = new DateTime(2016, 1, 1) }
+
+    static member Rules =
+        [ fun w fs dt -> fs ]
+
+    static member Scripts =
+        let timeProgressionRoutine =
+            co { let! (w : State) = getGlobalState_
+                 let! mailbox = getOuterState_
+                 let! fs = getInnerState_
+
+                 //Remove already processed messages
+                 let mailbox' = Mailbox.Filter mailbox 0 (function
+                     | ElapseTime _  -> false
+                     | CompleteDay   -> false
+                     | _             -> true)
+                 
+                 do! setOuterState_ mailbox'
+                 
+                 if not w.Paused then
+                    do! wait_ 0.1
+                    
+                    let fs' = { fs with DateTime = fs.DateTime.AddHours 0.24 }
+                    do! setInnerState_ fs'
+                    let mails = [] //[ ElapseTime 0.01 ]
+
+                    let mails'' =
+                       if fs.DateTime.Day < fs'.DateTime.Day then
+                           CompleteDay :: mails
+                       else
+                           mails
+                    
+                    do! setOuterState_ <| Mailbox.Send mailbox' 0 mails''
+                 
+                 do! yield_ } |> repeat_
+        
+        [ timeProgressionRoutine ]
+
+    static member dateTime =
+        { Get = fun (x : TimerFields) -> x.DateTime
+          Set = fun v (x : TimerFields) -> {x with DateTime = v} }
 
 //Keeps track of player state
 and PlayerFields =
     { ID    : int
       State : PlayerState } with
-    
+
     static member Zero =
         { ID    = -1
           State = PlayerState.Zero }
@@ -159,29 +164,24 @@ and PlayerFields =
         [ fun w fs dt -> fs ]
 
     static member Scripts =
-        let GetMailList id mailbox =
-            match Map.tryFind id mailbox.Contents with 
-             | Some mailList -> mailList
-             | None -> []
-
         let mailRoutine =
-            co { do! yield_
-                 let! (fs : PlayerFields) = getInnerState_
+            co { let! (fs : PlayerFields) = getInnerState_
                  let! mailbox = getOuterState_
-                 let mails = GetMailList 0 mailbox
-                 let state', mails' =
-                    List.fold (fun ((state : PlayerState), mails) mail ->
-                        match mail with
-                        | AffectHealth change    -> ({ state with Health    = System.Math.Max(0, state.Health    + change) }, mails)
-                        | AffectEnergy change    -> ({ state with Energy    = System.Math.Max(0, state.Energy    + change) }, mails)
-                        | AffectFinancial change -> ({ state with Financial = System.Math.Max(0, state.Financial + change) }, mails)
-                        | AffectBrand change     -> ({ state with Brand     = System.Math.Max(0, state.Brand     + change) }, mails)
-                        | AffectExpertise _      -> (state, mails)
-                        | AffectSkills _         -> (state, mails)
-                        | _ -> (state, mail :: mails)) (fs.State, []) mails
+                 let mails = Mailbox.Access mailbox 0
+
+                 let state', mails' = List.fold (fun ((state : PlayerState), acc) mail ->
+                     match mail with
+                     | AffectHealth    change -> ({ state with Health    = System.Math.Max(0, state.Health    + change) }, acc)
+                     | AffectEnergy    change -> ({ state with Energy    = System.Math.Max(0, state.Energy    + change) }, acc)
+                     | AffectFinancial change -> ({ state with Financial = System.Math.Max(0, state.Financial + change) }, acc)
+                     | AffectBrand     change -> ({ state with Brand     = System.Math.Max(0, state.Brand     + change) }, acc)
+                     | AffectExpertise _      -> (state, acc)
+                     | AffectSkills    _      -> (state, acc)
+                     | _                      -> (state, mail :: acc)) (fs.State, []) mails
+
                  do! setInnerState_ { fs with State = state' }
-                 let mailbox' = { mailbox with Contents = Map.add 0 mails' mailbox.Contents }
-                 do! setOuterState_ mailbox' } |> repeat_
+                 do! setOuterState_ { mailbox with Contents = Map.add 0 mails' mailbox.Contents }
+                 do! yield_ } |> repeat_
 
         [ mailRoutine ]
 
@@ -191,135 +191,167 @@ and PlayerFields =
 
 //Used to track the progress of activities
 and ActivityFields =
-    { ID          : int
-      Name        : string
-      Effects     : Mail List
-      ElapsedTime : double
-      Duration    : double
-      Paused      : bool } with 
-      
+    { ID         : int
+      Kind       : ActivityType
+      Effects    : Mail List
+      Schedule   : DateTime * DateTime
+      Continuous : bool
+      Paused     : bool } with
+    
     static member Zero =
-        { ID          = -1
-          Name        = ""
-          Effects     = List.empty
-          ElapsedTime = 0.0
-          Duration    = 1.0
-          Paused      = false }
-          
-    static member Music =
-        { ID          = -1
-          Name        = "music"
-          Effects     = [ AffectHealth -1
-                          AffectBrand 10
-                          AffectFinancial 10 ]
-          ElapsedTime = 0.0
-          Duration    = 10.0
-          Paused      = false }
-          
-    static member Game =
-        { ID          = -1
-          Name        = "game"
-          Effects     = [ AffectHealth 10
-                          AffectBrand -5
-                          AffectFinancial -10 ]
-          ElapsedTime = 0.0
-          Duration    = 5.0
-          Paused      = false }
-          
-    static member Paint =
-        { ID          = -1
-          Name        = "paint"
-          Effects     = [ AffectHealth 5
-                          AffectBrand 15
-                          AffectFinancial 3 ]
-          ElapsedTime = 0.0
-          Duration    = 3.0
-          Paused      = false; }
-          
+        { ID         = -1
+          Kind       = ActivityType.Default
+          Effects    = List.empty
+          Schedule   = new DateTime(2016, 1, 1), new DateTime(2016, 1, 2)
+          Continuous = false
+          Paused     = false }
+    
+    static member Human =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.Human
+            Effects = [ AffectHealth -1
+                        AffectBrand 10
+                        AffectFinancial 10 ] }
+    
+    static member Social =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.Social
+            Effects = [ AffectHealth 10
+                        AffectBrand -5
+                        AffectFinancial -10 ] }
+    
+    static member Financial =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.Financial
+            Effects = [ AffectHealth 5
+                        AffectBrand 15
+                        AffectFinancial 3 ] }
+    
+    static member Job =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.Job
+            Effects = [ AffectHealth 5
+                        AffectBrand 15
+                        AffectFinancial 3 ] }
+    
     static member Rules =
         [ fun w fs dt -> fs ]
-        
+
     static member Scripts =
-        let GetMailList id mailbox =
-            co { match Map.tryFind id mailbox.Contents with 
+        let progressRoutine =
+            co { let! fs = getInnerState_
+                 let! mailbox = getOuterState_
+                 let mails = Mailbox.Access mailbox 0
+
+                 (*
+                 let fs', mails' =
+                     List.fold (fun (fields, mails) mail ->
+                         match mail with
+                         | ElapseTime amount -> (fields, mail :: mails)
+                         | CompleteDay       -> (fields, mail :: mails)
+                         | _                 -> (fields, mail :: mails) ) (fs, []) mails
+                 
+                 do! setOuterState_ { mailbox with Contents = Mailbox.Replace mailbox 0 mails' }*)
+                 do! yield_ } |> repeat_
+
+        [ progressRoutine ]
+
+        (*
+        let getMailList id mailbox =
+            co { match Map.tryFind id mailbox.Contents with
                  | Some mailList -> return mailList
                  | None -> return [] }
-        
+
         let getPauseMail mailList activityName =
             List.exists (fun mail -> match mail with | PauseActivity name -> name = activityName | _ -> false) mailList
-        
+
         let getResumeMail mailList activityName =
             List.exists (fun mail -> match mail with | ResumeActivity name -> name = activityName | _ -> false) mailList
         
-        let filterMail mailList activityName =
-            List.filter (fun mail ->
-                match mail with 
-                | AddActivity    name
-                | RemoveActivity name
-                | PauseActivity  name
-                | RemoveActivity name -> name <> activityName
-                | _ -> true) mailList
-        
+        let getProgress () =
+            List.fold (fun count mail ->
+                match mail with
+                | TimeElapsed amount -> count + amount
+                | _ -> count) 0.0
+
+        let filterMail activityName =
+            function
+            | AddActivity    name
+            | RemoveActivity name
+            | PauseActivity  name -> name <> activityName
+            | _ -> true
+
         let mailRoutine =
-            co { do! yield_
+            co { let! mailbox = getOuterState_
+                 let! mailList = getMailList 0 mailbox
                  let! fs = getInnerState_
-                 let! mailbox = getOuterState_
-                 let! mailList = GetMailList 0 mailbox
-                 
-                 let fs' = if getPauseMail mailList fs.Name then { fs with Paused = true } else fs
+
+                 //See if this activity has been paused
+                 let fs'  = if getPauseMail  mailList fs.Name then { fs  with Paused = true }  else fs
                  let fs'' = if getResumeMail mailList fs.Name then { fs' with Paused = false } else fs'
                  do! setInnerState_ fs''
-                 
-                 let mailList' = filterMail mailList fs.Name
-                 let mailbox' = { mailbox with Contents = mailbox.Contents.Add (0, mailList') }
+
+                 //Remove any mails relating to this activity
+                 let mailbox' = Mailbox.Filter mailbox 0 <| filterMail fs.Name
                  do! setOuterState_ mailbox'
-                 
                  do! yield_ } |> repeat_
-            
+
         let progressRoutine =
-            co { do! yield_
-                 do! wait_ 0.1
-                 let! fs = getInnerState_
+            co { let! (w : State) = getGlobalState_
                  let! mailbox = getOuterState_
-                 let! mailList = GetMailList 0 mailbox
-                 if fs.ElapsedTime < fs.Duration then
-                     if not fs.Paused then
-                        if fs.ElapsedTime + 0.1 >= fs.Duration then
-                            Debug.Log (fs.Effects)
-                            let mailbox'  = Mailbox.SendUnique mailbox 0 [ RemoveActivity fs.Name ]
-                            let mailbox'' = Mailbox.Send mailbox' 0 fs.Effects
-                            do! setOuterState_ mailbox''
-                            do! setInnerState_ { fs with ElapsedTime = fs.Duration }
+                 let! mailList = getMailList 0 mailbox
+                 let! fs = getInnerState_
+
+                 if fs.Progress < fs.Duration then
+                     let progress = getProgress () mailList
+                     let fs' = { fs with Progress = fs.Progress + progress }
+                     do! setInnerState_ fs'
+
+                     if fs'.Progress >= fs.Duration then
+                        let mailbox'  = Mailbox.Send mailbox 0 fs.Effects
+                        do! setOuterState_ mailbox'
+
+                        if fs.Continuous then
+                            do! setInnerState_ { fs' with Progress = 0.0 }
                         else
-                            do! setInnerState_ { fs with ElapsedTime = fs.ElapsedTime + 0.1 } } |> repeat_
+                            let mailbox'' = Mailbox.SendUnique mailbox' 0 [ RemoveActivity fs.Name ]
+                            do! setOuterState_ mailbox''
+                 do! yield_ } |> repeat_
+
         [ mailRoutine
           progressRoutine ]
-        
-    static member name =
-        { Get = fun (x : ActivityFields) -> x.Name
-          Set = fun v (x : ActivityFields) -> {x with Name = v} }
-          
-    static member elapsedTime =
-        { Get = fun (x : ActivityFields) -> x.ElapsedTime
-          Set = fun v (x : ActivityFields) -> {x with ElapsedTime = v} }
-          
-    static member duration =
-        { Get = fun (x : ActivityFields) -> x.Duration
-          Set = fun v (x : ActivityFields) -> {x with Duration = v} }
-          
+        *)
+
+    static member kind =
+        { Get = fun (x : ActivityFields) -> x.Kind
+          Set = fun v (x : ActivityFields) -> {x with Kind = v} }
+
+    static member effects =
+        { Get = fun (x : ActivityFields) -> x.Effects
+          Set = fun v (x : ActivityFields) -> {x with Effects = v} }
+
+    static member schedule =
+        { Get = fun (x : ActivityFields) -> x.Schedule
+          Set = fun v (x : ActivityFields) -> {x with Schedule = v} }
+
+    static member continuous =
+        { Get = fun (x : ActivityFields) -> x.Continuous
+          Set = fun v (x : ActivityFields) -> {x with Continuous = v} }
+
     static member paused =
         { Get = fun (x : ActivityFields) -> x.Paused
           Set = fun v (x : ActivityFields) -> {x with Paused = v} }
 
 //Used to track the progress of events
+(*
 and EventFields =
     { ID          : int
       Name        : string
       Description : string
       Effects     : Mail List
       Activity    : Activity Option
-      Duration    : double } with 
-      
+      Duration    : double } with
+
     static member Zero =
         { ID          = -1
           Name        = ""
@@ -327,7 +359,7 @@ and EventFields =
           Effects     = List.empty
           Activity    = None
           Duration    = 1.0 }
-          
+
     static member RecordDeal =
         { ID          = -1
           Name        = ""
@@ -335,159 +367,134 @@ and EventFields =
           Effects     = List.empty
           Activity    = None
           Duration    = 1.0 }
-    
+
     static member Rules =
         [ fun w fs dt -> fs ]
-        
+
     static member Scripts =
         [ co { do! yield_ } |> repeat_ ]
-        
+
     static member name =
         { Get = fun (x : EventFields) -> x.Name
           Set = fun v (x : EventFields) -> {x with Name = v} }
-          
+
     static member description =
         { Get = fun (x : EventFields) -> x.Description
           Set = fun v (x : EventFields) -> {x with Description = v} }
-          
+
     static member effects =
         { Get = fun (x : EventFields) -> x.Effects
           Set = fun v (x : EventFields) -> {x with Effects = v} }
-          
+
     static member activity =
         { Get = fun (x : EventFields) -> x.Activity
           Set = fun v (x : EventFields) -> {x with Activity = v} }
-          
+
     static member duration =
         { Get = fun (x : EventFields) -> x.Duration
           Set = fun v (x : EventFields) -> {x with Duration = v} }
+*)
 
+and Timer    = Entity<State, TimerFields,    Mailbox>
 and Player   = Entity<State, PlayerFields,   Mailbox>
 and Activity = Entity<State, ActivityFields, Mailbox>
-and Event    = Entity<State, EventFields,    Mailbox>
- 
+//and Event    = Entity<State, EventFields,    Mailbox>
+
 //The global game state
 and State =
-    { Player     : Player
+    { Timer      : Timer
+      Player     : Player
       Activities : Activity List
       Events     : Event List
+      Paused     : bool
       Mailbox    : Mailbox
       ExitFlag   : bool
       Prefabs    : Map<string, GameObject> } with
-      
+
     static member Zero =
-        { Player     = Player.Create(PlayerFields.Zero, PlayerFields.Rules, PlayerFields.Scripts)
-          Activities = List.empty
-          Events     = List.empty
+        { Timer      = Timer.Create (TimerFields.Zero, TimerFields.Rules, TimerFields.Scripts)
+          Player     = Player.Create (PlayerFields.Zero, PlayerFields.Rules, PlayerFields.Scripts)
+          Activities = [ Activity.Create ({ ActivityFields.Human with ID = randomHash () },
+                                            ActivityFields.Rules,
+                                            ActivityFields.Scripts) ]
+          Events     = []
+          Paused     = false
           Mailbox    = Mailbox.Zero
           ExitFlag   = false
           Prefabs    = Map.empty }
-    
+
     static member Initialize s =
         s
-    
+
     static member Terminate s =
         s
-    
-    static member SetPrefabs s prefabs =
+
+    static member SetPrefabs prefabs s =
         { s with Prefabs = prefabs }
-    
+
+    //Process incoming UI requests
+    static member ProcessRequests s =
+        let mails = Mailbox.Access s.Mailbox 0
+
+        let state', mails' =
+            List.fold (fun (state, mails) mail ->
+                match mail with
+                | GlobalPause  -> { s with Paused = true },  mails
+                | GlobalResume -> { s with Paused = false }, mails
+                | _ -> s, mail :: mails) (s, []) mails
+
+        let mailbox' = { state'.Mailbox with Contents = Mailbox.Replace s.Mailbox 0 mails' }
+        { state' with Mailbox = mailbox' }
+
     //Process update logic for all entities
     static member UpdateEntities dt s =
-        let activities', mailbox' =
+        let timer', mailbox' = s.Timer.Update (s, s.Mailbox, dt)
+
+        let activities', mailbox'' =
              List.fold (fun (activities, mailbox) (activity : Activity) ->
                 let activity', mailbox' = activity.Update (s, mailbox, dt)
-                (activity' :: activities, mailbox')) (List.empty, s.Mailbox) s.Activities
-                
-        let player', mailbox'' = s.Player.Update (s, mailbox', dt)
+                (activity' :: activities, mailbox')) ([], mailbox') s.Activities
         
-        { s with Player     = player'
+        let player', mailbox''' = s.Player.Update (s, mailbox'', dt)
+
+        { s with Timer      = timer'
+                 Player     = player'
                  Activities = activities'
-                 Mailbox    = mailbox'' }
-    
+                 Mailbox    = mailbox''' }
+
     static member EmptyMailbox s =
         { s with Mailbox = Mailbox.Zero }
-    
+
     //Add new entities
     static member Emerge s =
-        let getFields name =
-            match name with
-            | "music" -> Some ActivityFields.Music
-            | "game"  -> Some ActivityFields.Game
-            | "paint" -> Some ActivityFields.Paint
-            | _ -> Debug.LogError ("Failed to find activity fields for " + name + "!"); None
-        
-        let getAdditions =
-            List.fold (fun additions mail ->
-                match mail with
-                | AddActivity name ->
-                    match (getFields name) with 
-                    | Some fields -> fields :: additions
-                    | None -> additions
-                | _ -> additions) []
-        
-        let getActivities =
-            List.fold (fun activities (fields : ActivityFields) ->
-                let activity =
-                    Activity.Create({ fields with ID = randomHash () },
-                                    ActivityFields.Rules,
-                                    ActivityFields.Scripts)
-                (activity :: activities)) s.Activities
-        
-        let filterMail =
-            List.filter (fun mail -> match mail with | AddActivity _ -> false | _ -> true)
-        
-        let contentsLens = State.mailbox >>| Mailbox.contents
-        
-        match Map.tryFind 0 s.Mailbox.Contents with 
-        | Some mails -> s |> State.activities.Set (mails |> getAdditions |> getActivities)
-                          |> contentsLens.Set (Map.add 0 (filterMail mails) s.Mailbox.Contents) 
-        | None -> s
-    
+        s
+
     //Remove old entities
     static member Cleanse s =
-        let getRemovals =
-            List.fold (fun removals mail ->
-                match mail with
-                | RemoveActivity name -> name :: removals
-                | _ -> removals) []
-        
-        let filterActivities =
-            fun removals -> List.filter (fun (a : Activity) ->
-                not <| List.exists (fun e -> a.Fields.Name = e) removals) s.Activities
-        
-        let filterMail =
-            List.filter (fun mail -> match mail with | RemoveActivity _ -> false | _ -> true)
-        
-        let contentsLens = State.mailbox >>| Mailbox.contents
-        
-        match Map.tryFind 0 s.Mailbox.Contents with
-        | Some mails ->
-            s |> State.activities.Set (mails |> getRemovals |> filterActivities)
-              //|> contentsLens.Set (Map.add 0 (filterMail mails) s.Mailbox.Contents)
-        | None -> s
-    
+        s
+
     static member Update dt s =
-        s |> State.UpdateEntities dt
+        s //|> State.ProcessRequests
           |> State.Emerge
+          |> State.UpdateEntities dt
           |> State.Cleanse
-    
+
     //Return a list of activity fields
     static member GetActivityData (s : State) =
         List.fold (fun acc activity -> activity.Fields :: acc) [] s.Activities
-    
+
     static member player =
         { Get = fun (x : State) -> x.Player
           Set = fun v (x : State) -> {x with Player = v} }
-    
+
     static member activities =
         { Get = fun (x : State) -> x.Activities
           Set = fun v (x : State) -> {x with Activities = v} }
-    
+
     static member mailbox =
         { Get = fun (x : State) -> x.Mailbox
           Set = fun v (x : State) -> {x with Mailbox = v} }
-    
+
     static member prefabs =
         { Get = fun (x : State) -> x.Prefabs
           Set = fun v (x : State) -> {x with Prefabs = v} }

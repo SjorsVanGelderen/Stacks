@@ -4,6 +4,8 @@
 
 module Coroutine
 
+open UnityEngine
+
 //Factorizes objects and recomposes them, f3 is not used by any routines
 type Factorization<'f, 'f1, 'f2, 'f3> =
     { Factorize : 'f -> 'f1 * 'f2 * 'f3
@@ -219,24 +221,40 @@ let sequenceIgnoreMany_ routines =
     | [] -> return_ ()
 
 //Process a routine for a given amount of time
-let timed_ s r =
-    //let time = co { return System.DateTime.Now }
+//This should be changed into a pure function
+let rec timed_ seconds routine =
     let time = fun w so si -> Done(so, si, System.DateTime.Now)
     co { let! t0 = time
          let rec waitRoutine () =
              co { let! t = time
                   let dt = (t - t0).TotalSeconds
-                  if dt < s then
+                  if dt < seconds then
                       do! yield_
-                      do! r
+                      do! routine
                       return! waitRoutine () }
          do! waitRoutine () }
 
+    (*
+    let duration () = System.TimeSpan.FromSeconds(seconds)
+    let time () = co { return System.DateTime.Now }
+
+    co { let! start = time ()
+         let rec timerRoutine () =
+            co { let! now = time ()
+                 if now < start + (duration ()) then
+                    do! routine
+                    do! yield_
+                    return! timerRoutine () }
+         
+         do! timerRoutine () }
+         *)
+
+
 //Suspend a routine for a given amount of time
-let wait_ s =
-    timed_ s (co { return () })
+let wait_ seconds =
+    timed_ seconds (co { return () })
 
 //timeout that returns x when timing out
-let timeoutWith_ s x =
-  co { do! wait_ s
+let timeoutWith_ seconds x =
+  co { do! wait_ seconds
        return x }

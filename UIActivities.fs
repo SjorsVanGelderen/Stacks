@@ -11,22 +11,12 @@ open UnityEngine.UI
 [<AllowNullLiteralAttribute>]
 type MonacoUIActivitiesController () =
     inherit MonoBehaviour ()
-     
-    [<SerializeField>]
-    let mutable playerController = Unchecked.defaultof<MonacoPlayerController>
-    
-    [<SerializeField>]
-    let mutable prefabMusic      = Unchecked.defaultof<GameObject>
-
-    [<SerializeField>]
-    let mutable prefabGame       = Unchecked.defaultof<GameObject>
-
-    [<SerializeField>]
-    let mutable prefabPaint      = Unchecked.defaultof<GameObject>
     
     let mutable pieSprites = Unchecked.defaultof<Sprite List>
     
     member this.AddActivity name =
+        ()
+        (*
         match playerController with 
         | null -> Debug.LogError ("Failed to find player controller!")
         | _ -> playerController.AddActivity name
@@ -54,9 +44,11 @@ type MonacoUIActivitiesController () =
             with 
                 | ex -> Debug.LogError (ex.Message)
         | None -> Debug.LogError ("Failed to load prefab for " + name + "!")
-        ()
+        ()*)
         
     member this.UpdateActivity name progress =
+        ()
+        (*
         try
             let activityObject = this.transform.Find("Container/" + name)
             if activityObject = null then
@@ -68,10 +60,12 @@ type MonacoUIActivitiesController () =
                 else
                     activityComponent.SetProgress (progress)
         with
-            | ex -> Debug.LogError (ex.Message)
+            | ex -> Debug.LogError (ex.Message)*)
                     
     
     member this.RemoveActivity name =
+        ()
+        (*
         match playerController with 
         | null -> Debug.LogError ("Failed to find player controller!")
         | _ -> playerController.RemoveActivity name
@@ -80,7 +74,7 @@ type MonacoUIActivitiesController () =
         if activityObject = null then
             Debug.LogError ("Failed to find activity object to remove!")
         else
-            GameObject.Destroy(activityObject.gameObject)
+            GameObject.Destroy(activityObject.gameObject)*)
 
 //This controller manages a single activity UI element
 and [<AllowNullLiteralAttribute>]
