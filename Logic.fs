@@ -19,9 +19,6 @@ type ActivityProgressDict = System.Collections.Generic.IDictionary<int, float32>
 type MonacoLogic () =
     inherit MonoBehaviour ()
     
-    [<SerializeField>]
-    let mutable uiController : MonacoUIController = Unchecked.defaultof<MonacoUIController> //Base UI controller
-    
     let mutable requestsUI : Mail List = [] //UI mails to be captured by the state
     let mutable state : State = State.Zero  //The base game state
 
@@ -43,6 +40,8 @@ type MonacoLogic () =
             Application.Quit ()
 
     member this.UpdateUI () =
+        ()
+        (*
         match uiController with
         | null -> Debug.LogError ("Failed to access UI controller!")
         | _    ->
@@ -66,6 +65,7 @@ type MonacoLogic () =
                     | _                      -> map) Map.empty state.Activities
             
             uiController.UpdateActivities activityProgressMap
+            *)
 
     member this.UIRequest (request : string) =
         //Translate string request to mail

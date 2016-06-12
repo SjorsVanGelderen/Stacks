@@ -50,7 +50,6 @@
     <Compile Include="Communications.fs" />
     <Compile Include="Player.fs" />
     <Compile Include="UIActivities.fs" />
-    <Compile Include="UIController.fs" />
     <Compile Include="Logic.fs" />
     <Compile Include="Script.fsx" />
   </ItemGroup>
