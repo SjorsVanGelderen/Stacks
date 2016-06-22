@@ -8,109 +8,61 @@ using UnityEngine;
 using UnityEngine.UI;
 using Monaco;
 
-using ActivityType       = Communications.ActivityType;
-using ActivityPrefabDict = System.Collections.Generic.Dictionary<ActivityType, UnityEngine.GameObject>;
-using ActivityDict       = System.Collections.Generic.Dictionary<int, UIActivity>;
-
-class UIController : MonoBehaviour
-{
-    public MonacoLogic controllerGameReference;
-    public Canvas canvasMainReference;
-    public Slider sliderDayReference;
-    public List<ActivityType> activityTypes = new List<ActivityType>();
+public class UIController : MonoBehaviour
+{    
+    private Option<MonacoLogic> controllerGame  = new None<MonacoLogic>();
+    private Option<UIScheduler> scheduler       = new None<UIScheduler>();
+    private Option<Slider>      sliderDay       = new None<Slider>();
     
-    private Option<MonacoLogic>        controllerGame  = new None<MonacoLogic>();
-    private Option<Canvas>             canvasMain      = new None<Canvas>();
-    private Option<Slider>             sliderDay       = new None<Slider>();
-    private Option<ActivityPrefabDict> activityPrefabs = new None<ActivityPrefabDict>();
-    private Option<ActivityDict>       activities      = new None<ActivityDict>();
-    
-    Option<ActivityPrefabDict> LoadActivityPrefabs()
+    void Awake()
     {
-        var prefabs = new ActivityPrefabDict();
-        if(prefabs == null)
-        {
-            Debug.LogError ("Failed to instantiate prefab list!");
-            return new None<ActivityPrefabDict>();
-        }
-        
-        foreach(ActivityType kind in activityTypes)
-        {
-            if(prefabs.ContainsKey(kind))
-            {
-                Debug.LogError("Failed to add entry; duplicate key!");
-                return new None<ActivityPrefabDict>();
-            }
-            
-            string name = "";
-            switch(kind)
-            {
-            case ActivityType.Human:
-                name = "human";
-                break;
-                
-            case ActivityType.Social:
-                name = "social";
-                break;
-                
-            case ActivityType.Financial:
-                name = "financial";
-                break;
-                
-            default:
-                Debug.LogError("Failed to translate activity type to filename!");
-                break;
-            }
-            
-            if(name == "")
-            {
-                return new None<ActivityPrefabDict>();
-            }
-            
-            var prefab = Resources.Load<GameObject>("Prefabs/Activities/" + name);
-            if(prefab == null)
-            {
-                Debug.LogError("Failed to load prefab for " + name + "!");
-                return new None<ActivityPrefabDict>();
-            }
-            
-            prefabs.Add(kind, prefab);
-        }
-        
-        return new Some<ActivityPrefabDict>(prefabs);
-    }
-    
-    void Start()
-    {        
-        activityPrefabs = LoadActivityPrefabs();
-        
-        if(controllerGameReference == null)
-        {
-            Debug.LogError ("Failed to access game controller!");
+	var controllerGameObject = GameObject.FindWithTag("GameController");
+	if(controllerGameObject == null)
+	{
+	    Debug.LogError("Failed to access game controller object!");
+	}
+	else
+	{
+	    var controllerGameComponent = controllerGameObject.GetComponent<MonacoLogic>();
+	    if(controllerGameComponent == null)
+	    {
+		Debug.LogError("Failed to access game controller component!");
+	    }
+	    else
+	    {
+		controllerGame = new Some<MonacoLogic>(controllerGameComponent);
+	    }
+	}
+
+	var schedulerComponent = GetComponent<UIScheduler>();
+	if(schedulerComponent == null)
+	{
+            Debug.LogError("Failed to access scheduler component!");
         }
         else
         {
-            controllerGame = new Some<MonacoLogic>(controllerGameReference);
+            scheduler = new Some<UIScheduler>(schedulerComponent);
         }
-        
-        if(canvasMainReference == null)
+
+	var sliderDayObject = transform.Find("CanvasMain/SliderDay");
+        if(sliderDayObject == null)
         {
-            Debug.LogError ("Failed to access main canvas!");
+            Debug.LogError ("Failed to access day slider object!");
         }
         else
         {
-            canvasMain = new Some<Canvas>(canvasMainReference);
+	    var sliderDayComponent = sliderDayObject.GetComponent<Slider>();
+	    if(sliderDayComponent == null)
+	    {
+		Debug.LogError("Failed to access day slider component!");
+	    }
+	    else
+	    {
+		sliderDay = new Some<Slider>(sliderDayComponent);
+	    }
         }
-        
-        if(sliderDayReference == null)
-        {
-            Debug.LogError ("Failed to access day slider!");
-        }
-        else
-        {
-            sliderDay = new Some<Slider>(sliderDayReference);
-        }
-        
+	
+        /*
         //Arguably the activities list does not need to be an Option
         var activityDictionary = new Dictionary<int, UIActivity>();
         if(activityDictionary == null)
@@ -125,14 +77,32 @@ class UIController : MonoBehaviour
         //AddActivity("human", true);
         //AddActivity("social", true);
         //AddActivity("financial", false);
+        */
     }
     
-    void Update()
+    //Update the representation of the daytime slider
+    void UpdateSliderDay()
     {
-        UpdateSliderDay();
-        UpdateActivities();
+        controllerGame.Visit<Unit>(
+            x  => { sliderDay.Visit<Unit>(
+                        y  => { y.value = x.QueryDayTime() / 24.0f;
+                                return Unit.Instance; },
+                        () => { Debug.LogError("Failed to access day slider!");
+                                return Unit.Instance; }); 
+                    return Unit.Instance;},
+            () => { Debug.LogError ("Failed to access game controller!");
+                    return Unit.Instance; });
     }
     
+    //Update all activity UI objects
+    void UpdateActivities()
+    {
+	
+    }
+}
+
+
+    /*
     //Add a new activity object to the UI
     public void AddActivity(int _id, ActivityType _kind, DateTime _startDate, DateTime _endDate, bool _continuous)
     {
@@ -170,25 +140,27 @@ class UIController : MonoBehaviour
             () => { Debug.LogError("Failed to access activity prefabs!");
                     return Unit.Instance; });
     }
+    */
     
-    //Update the representation of the daytime slider
-    void UpdateSliderDay()
+    /*
+    //Query an activity's start date
+    public Option<DateTime> QueryStartDate(int _id)
     {
-        controllerGame.Visit<Unit>(
-            x => { sliderDay.Visit<Unit>(
-                       y => { y.value = x.QueryDayTime() / 24.0f;
-                              return Unit.Instance; },
-                       () => { Debug.LogError("Failed to access day slider!");
-                               return Unit.Instance; });
-                               
-                   return Unit.Instance; },
-            () => { Debug.LogError ("Failed to access game controller!");
-                    return Unit.Instance; });
+        return controllerGame.Visit<Option<DateTime>>(
+            x  => { DateTime startDate = x.QueryStartDate(_id);
+                    if(startDate.Year == 0)
+                    {
+                        Debug.LogError("Failed to query start date; invalid year!");
+                        return new None<DateTime>();
+                    }
+                    return new Some<DateTime>(startDate); },
+            () => { Debug.LogError("Failed to access game controller!");
+                    return new None<DateTime>(); });
     }
     
-    //Update all activity UI objects
-    void UpdateActivities()
-    {
+    
+
+    /*
         controllerGame.Visit<Unit>(
             x => { var data = new Dictionary<int, float>(x.QueryActivityProgress());
                    
@@ -212,5 +184,4 @@ class UIController : MonoBehaviour
                    return Unit.Instance; },
             () => { Debug.LogError("Failed to access game controller!");
                     return Unit.Instance; });
-    }
-}
+                    */

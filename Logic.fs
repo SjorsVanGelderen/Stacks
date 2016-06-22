@@ -13,6 +13,7 @@ open Lens
 open Communications
 open Model
 
+//Alias for dictionaries matching activity IDs to progress measurements
 type ActivityProgressDict = System.Collections.Generic.IDictionary<int, float32>
 
 //Core game logic component
@@ -25,47 +26,16 @@ type MonacoLogic () =
     member this.Start () =
         do state <- state |> State.Initialize
 
-        //Process any startup entities here
-
     member this.Update () =
         //Capture UI requests in the state before updating
         do state <- { state with Mailbox = Mailbox.SendUnique state.Mailbox 0 requestsUI }
         requestsUI <- [] //Clear the processed UI requests
-
+        
         do state <- State.Update Time.deltaTime state
-        //this.UpdateUI ()
 
         if state.ExitFlag then
             state <- State.Terminate state
             Application.Quit ()
-
-    member this.UpdateUI () =
-        ()
-        (*
-        match uiController with
-        | null -> Debug.LogError ("Failed to access UI controller!")
-        | _    ->
-            uiController.UpdateDaySlider state.Timer.Fields.DateTime.Hour
-
-            let getProgress (startDate, endDate) =
-                let currentDate : DateTime = state.Timer.Fields.DateTime
-                if currentDate > startDate && currentDate < endDate then
-                    double currentDate.Hour / 24.0
-                else
-                    0.0
-            
-            let activityProgressMap =
-                List.fold (fun (map : Map<string, double>) (activity : Activity) ->
-                    let progress = getProgress activity.Fields.Schedule
-                    match activity.Fields.Kind with
-                    | ActivityType.Human     -> map.Add ("human",     progress)
-                    | ActivityType.Social    -> map.Add ("social",    progress)
-                    | ActivityType.Financial -> map.Add ("financial", progress)
-                    | ActivityType.Job       -> map.Add ("job",       progress)
-                    | _                      -> map) Map.empty state.Activities
-            
-            uiController.UpdateActivities activityProgressMap
-            *)
 
     member this.UIRequest (request : string) =
         //Translate string request to mail
@@ -77,12 +47,42 @@ type MonacoLogic () =
     member this.Quit () =
         do state <- { state with ExitFlag = true }
 
+    member this.QuerySchedule startDate endDate =
+        List.exists (fun acc elem ->
+            match elem.Fields.Mode with
+            | Scheduled (startDate, endDate) -> [ startDate, endDate ] @ acc
+            | Continuous                     -> acc) [] state.Activities
+    
     member this.QueryActivityProgress () : ActivityProgressDict =
         List.fold (fun acc elem -> (elem.Fields.ID, float32 <| random.NextDouble() ) :: acc) [] state.Activities
             |> Map.ofList |> Map.toSeq |> dict
-
+    
     member this.QueryDayTime () =
         state.Timer.Fields.DateTime.Hour
+
+    member this.QueryStartDate id =
+        match List.tryFind (fun (elem : Activity) -> elem.Fields.ID = id) state.Activities with
+        | Some activity ->
+            match activity.Fields.Mode with
+            | Scheduled (startDate, _) -> startDate
+            | Continuous ->
+                Debug.LogError("Failed to answer query; activity is continuous!")
+                new DateTime(0, 0, 0);
+        | None          ->
+            Debug.LogError("Failed to answer query; invalid ID: " + id.ToString() + "!")
+            new DateTime(0, 0, 0)
+
+    member this.QueryEndDate id =
+        match List.tryFind (fun (elem : Activity) -> elem.Fields.ID = id) state.Activities with
+        | Some activity ->
+            match activity.Fields.Mode with
+            | Scheduled (_, endDate) -> endDate
+            | Continuous ->
+                Debug.LogError("Failed to answer query; activity is continuous!")
+                new DateTime(0, 0, 0);
+        | None          ->
+            Debug.LogError("Failed to answer query; invalid ID: " + id.ToString() + "!")
+            new DateTime(0, 0, 0)
 
 //Global entity structure
 and Entity<'w, 'fs, 'mailbox> =
@@ -189,21 +189,23 @@ and PlayerFields =
         { Get = fun (x : PlayerFields) -> x.State
           Set = fun v (x : PlayerFields) -> {x with State = v} }
 
+and ActivityMode =
+    | Scheduled of DateTime * DateTime
+    | Continuous
+
 //Used to track the progress of activities
 and ActivityFields =
     { ID         : int
       Kind       : ActivityType
       Effects    : Mail List
-      Schedule   : DateTime * DateTime
-      Continuous : bool
+      Mode       : ActivityMode
       Paused     : bool } with
     
     static member Zero =
         { ID         = -1
           Kind       = ActivityType.Default
           Effects    = List.empty
-          Schedule   = new DateTime(2016, 1, 1), new DateTime(2016, 1, 2)
-          Continuous = false
+          Mode       = Scheduled (new DateTime(2016, 1, 1), new DateTime(2016, 1, 2))
           Paused     = false }
     
     static member Human =
@@ -331,12 +333,8 @@ and ActivityFields =
           Set = fun v (x : ActivityFields) -> {x with Effects = v} }
 
     static member schedule =
-        { Get = fun (x : ActivityFields) -> x.Schedule
-          Set = fun v (x : ActivityFields) -> {x with Schedule = v} }
-
-    static member continuous =
-        { Get = fun (x : ActivityFields) -> x.Continuous
-          Set = fun v (x : ActivityFields) -> {x with Continuous = v} }
+        { Get = fun (x : ActivityFields) -> x.Mode
+          Set = fun v (x : ActivityFields) -> {x with Mode = v} }
 
     static member paused =
         { Get = fun (x : ActivityFields) -> x.Paused

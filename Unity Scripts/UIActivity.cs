@@ -14,61 +14,7 @@ public class UIActivity : MonoBehaviour
     private Option<Image> imagePie = new None<Image>();
     private Option<List<Sprite>> sprites = new None<List<Sprite>>();
     
-    Option<Image> GetPieImage()
-    {
-        var pieChild = transform.Find("pie");
-        if(pieChild == null)
-        {
-            Debug.LogError("Failed to access pie object!");
-            return new None<Image>();
-        }
-        
-        var component = pieChild.GetComponent<Image>();
-        if(component == null)
-        {
-            return new None<Image>();
-        }
-        else
-        {
-            return new Some<Image>(component);
-        }
-    }
-    
-    Option<List<Sprite>> LoadSprites()
-    {
-        var sprites = new List<Sprite>();
-        if(sprites == null)
-        {
-            return new None<List<Sprite>>();
-        }
-        
-        for(int i = 0; i < SPRITE_COUNT; i++)
-        {
-            var sprite = Resources.Load<Sprite>("Sprites/Pie/pie_" + i.ToString());
-            if(sprite == null)
-            {
-                Debug.LogError ("Failed to load pie sprite " + i.ToString() + "!");
-                break;
-            }
-            
-            sprites.Add(sprite);
-        }
-        
-        return new Some<List<Sprite>>(sprites);
-    }
-    
-    void Start()
-    {        
-        //Populate options
-        imagePie = GetPieImage();
-        sprites = LoadSprites();
-    }
-    
-    void Update()
-    {
-        
-    }
-    
+    //Specify a schedule for this activity
     public void SetMode(bool _continuous)
     {
         GameObject container = null;
@@ -111,5 +57,61 @@ public class UIActivity : MonoBehaviour
                    return Unit.Instance; },
             () => { Debug.LogError("Failed to access sprites!");
                     return Unit.Instance; });
+    }
+    
+    //Get the image component for the progress pie
+    Option<Image> GetPieImage()
+    {
+        var pieChild = transform.Find("pie");
+        if(pieChild == null)
+        {
+            Debug.LogError("Failed to access pie object!");
+            return new None<Image>();
+        }
+        
+        var component = pieChild.GetComponent<Image>();
+        if(component == null)
+        {
+            return new None<Image>();
+        }
+        else
+        {
+            return new Some<Image>(component);
+        }
+    }
+    
+    //Load all the progress sprites
+    Option<List<Sprite>> LoadSprites()
+    {
+        var sprites = new List<Sprite>();
+        if(sprites == null)
+        {
+            return new None<List<Sprite>>();
+        }
+        
+        for(int i = 0; i < SPRITE_COUNT; i++)
+        {
+            var sprite = Resources.Load<Sprite>("Sprites/Pie/pie_" + i.ToString());
+            if(sprite == null)
+            {
+                Debug.LogError ("Failed to load pie sprite " + i.ToString() + "!");
+                break;
+            }
+            
+            sprites.Add(sprite);
+        }
+        
+        return new Some<List<Sprite>>(sprites);
+    }
+    
+    void Start()
+    {
+        imagePie = GetPieImage();
+        sprites = LoadSprites();
+    }
+    
+    void Update()
+    {
+        
     }
 }
