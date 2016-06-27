@@ -7,36 +7,34 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+using ActivityType = Communications.ActivityType;
+
 public class UIActivityContainer : MonoBehaviour
 {
+    public ActivityType kind = ActivityType.Default;
+    
     private Option<DateTime>    time      = new None<DateTime>();
     private Option<int>         id        = new None<int>();
     private Option<UIScheduler> scheduler = new None<UIScheduler>();
-    private Option<Button>      button    = new None<Button>();
+    //private Option<Button>      button    = new None<Button>();
     private Option<Image>       image     = new None<Image>();
     private Option<Text>        text      = new None<Text>();
+    private Option<UIPie>       pie       = new None<UIPie>();
 
     //Various colors for distinguishing between months
     static Color[] monthColors = 
-        { new Color(1.0f,  0.8f,  0.8f,  1.0f),
-	  new Color(1.0f,  0.87f, 0.8f,  1.0f),
-	  new Color(1.0f,  0.91f, 0.8f,  1.0f),
-	  new Color(1.0f,  0.95f, 0.8f,  1.0f),
-	  new Color(1.0f,  0.99f, 0.8f,  1.0f),
-	  new Color(0.93f, 0.98f, 0.78f, 1.0f),
-	  new Color(0.78f, 0.96f, 0.76f, 1.0f),
-	  new Color(0.76f, 0.94f, 0.95f, 1.0f),
-	  new Color(0.76f, 0.85f, 0.95f, 1.0f),
-	  new Color(0.78f, 0.76f, 0.95f, 1.0f),
-	  new Color(0.88f, 0.76f, 0.95f, 1.0f),
-	  new Color(0.96f, 0.77f, 0.9f,  1.0f) };
-
-    /*
-    public void SetMode(bool _continuous)
-    {
-    
-    }
-    */
+        { new Color(1.00f, 0.80f, 0.80f, 1.00f),
+	  new Color(1.00f, 0.87f, 0.80f, 1.00f),
+	  new Color(1.00f, 0.91f, 0.80f, 1.00f),
+	  new Color(1.00f, 0.95f, 0.80f, 1.00f),
+	  new Color(1.00f, 0.99f, 0.80f, 1.00f),
+	  new Color(0.93f, 0.98f, 0.78f, 1.00f),
+	  new Color(0.78f, 0.96f, 0.76f, 1.00f),
+	  new Color(0.76f, 0.94f, 0.95f, 1.00f),
+	  new Color(0.76f, 0.85f, 0.95f, 1.00f),
+	  new Color(0.78f, 0.76f, 0.95f, 1.00f),
+	  new Color(0.88f, 0.76f, 0.95f, 1.00f),
+	  new Color(0.96f, 0.77f, 0.90f, 1.00f) };
     
     //Assign a date to this container
     public void SetTime(DateTime _time)
@@ -55,6 +53,18 @@ public class UIActivityContainer : MonoBehaviour
 		    return Unit.Instance; },
 	    () => { Debug.LogError("Failed to access image component!");
 		    return Unit.Instance; });
+    }
+
+    //Retrieve this ID, if any is assigned
+    public Option<int> GetID()
+    {
+	return id;
+    }
+
+    //Assign a new ID
+    public void SetID(Option<int> _id)
+    {
+	id = _id;
     }
     
     //Activity container clicked; trigger a scheduler action
@@ -110,14 +120,22 @@ public class UIActivityContainer : MonoBehaviour
 		        return Unit.Instance; }),
 	    () => { Debug.LogError("Failed to access text component!");
 		    return Unit.Instance; });
+
+	pie.Visit<Unit>(
+	    x  => { x.SetProgress(0);
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access pie component!");
+		    return Unit.Instance; });
     }
 
+    //Get the currently assigned image
     public Option<Sprite> GetSprite()
     {
 	return image.Visit<Option<Sprite>>(
 	    x  => { if(x.sprite == null)
 		    {
-			Debug.LogError("Failed to access sprite!");
+			//Debug.LogError("Failed to access sprite!");
+			//This container has no sprite
 			return new None<Sprite>();
 		    }
 		    
@@ -125,9 +143,33 @@ public class UIActivityContainer : MonoBehaviour
 	    () => { Debug.LogError("Failed to access image component!");
 		    return new None<Sprite>(); });
     }
+
+    //Assign a new image
+    public void SetSprite(Option<Sprite> _sprite)
+    {
+	image.Visit<Unit>(
+	    x  => _sprite.Visit<Unit>(
+	    y  => { x.sprite = y;
+		    return Unit.Instance; },
+	    () => { x.sprite = null;
+		    return Unit.Instance; }),
+	    () => { Debug.LogError("Failed to access image component!");
+		    return Unit.Instance; });
+    }
+
+    //Update the pie sprite progress
+    public void SetProgress(float _progress)
+    {
+	pie.Visit<Unit>(
+	    x  => { x.SetProgress(_progress);
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access pie component!");
+		    return Unit.Instance; });
+    }
     
     void Awake()
     {
+	/*
         var scheduleObject = GameObject.FindWithTag("Schedule");
         if(scheduleObject == null)
         {
@@ -137,6 +179,7 @@ public class UIActivityContainer : MonoBehaviour
         {
             transform.SetParent(scheduleObject.transform);
         }
+	*/
 	
         var schedulerObject = GameObject.FindWithTag("UI");
         if(schedulerObject == null)
@@ -155,7 +198,8 @@ public class UIActivityContainer : MonoBehaviour
                 scheduler = new Some<UIScheduler>(schedulerComponent);
             }
         }
-        
+
+	/*
         var buttonComponent = GetComponent<Button>();
         if(buttonComponent == null)
         {
@@ -165,6 +209,7 @@ public class UIActivityContainer : MonoBehaviour
         {
             button = new Some<Button>(buttonComponent);
         }
+	*/
 
 	var textComponent = GetComponentInChildren<Text>();
         if(textComponent == null)
@@ -192,6 +237,16 @@ public class UIActivityContainer : MonoBehaviour
 	    {
 		image = new Some<Image>(imageComponent);
 	    }
+	}
+
+	var pieComponent = GetComponentInChildren<UIPie>();
+	if(pieComponent == null)
+	{
+	    Debug.LogError("Failed to access pie component!");
+	}
+	else
+	{
+	    pie = new Some<UIPie>(pieComponent);
 	}
     }
 }

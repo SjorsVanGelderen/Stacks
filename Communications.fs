@@ -1,9 +1,11 @@
 (*
     Basic communications within and from outside of the state
+    Note that some types are only declared here to prevent module ordering problems
 *)
 
 module Communications
 
+open System
 open Lens
 open Model
 
@@ -18,13 +20,18 @@ type ActivityType =
     | Financial = 3
     | Job       = 4
 
+//Activities can be scheduled or continuous
+type ActivityMode =
+    | Scheduled of DateTime * DateTime
+    | Continuous
+
 //The basic unit of communication
 type Mail =
     | GlobalPause
     | GlobalResume
     | CompleteDay
     | ElapseTime       of double //In days
-    | AddActivity      of ActivityType
+    | AddActivity      of ID * ActivityType * ActivityMode
     | RemoveActivity   of string
     | PauseActivity    of string
     | ResumeActivity   of string
@@ -58,7 +65,7 @@ type Mailbox =
         let mails = Mailbox.Access mailbox id
         { mailbox with Contents = Map.add id <| List.filter predicate mails <| mailbox.Contents }
 
-    static member Replace mailbox id mails=
+    static member Replace mailbox id mails =
         Map.add id mails mailbox.Contents
 
     static member Access mailbox id =

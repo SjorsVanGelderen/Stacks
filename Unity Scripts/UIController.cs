@@ -1,5 +1,6 @@
 /*
     Controller for managing the UI at large
+    This is the only component that can interact directly with the Monaco Logic controller
 */
 
 using System;
@@ -8,14 +9,60 @@ using UnityEngine;
 using UnityEngine.UI;
 using Monaco;
 
+using ActivityType = Communications.ActivityType;
+
 public class UIController : MonoBehaviour
-{    
-    private Option<MonacoLogic> controllerGame  = new None<MonacoLogic>();
-    private Option<UIScheduler> scheduler       = new None<UIScheduler>();
-    private Option<Slider>      sliderDay       = new None<Slider>();
+{
+    private Option<MonacoLogic>       controllerGame  = new None<MonacoLogic>();
+    private Option<UIScheduler>       scheduler       = new None<UIScheduler>();
+    private Option<UIEventController> controllerEvent = new None<UIEventController>();
+    private Option<Slider>            sliderDay       = new None<Slider>();
+    private DateTime                  lastDate        = new DateTime(2016, 1, 1);
+    private bool                      dayComplete     = false;
+    
+    //Ask the game controller to create a scheduled activity
+    public Option<int> EmergeScheduledActivity(ActivityType _kind, DateTime _from, DateTime _to)
+    {
+	return controllerGame.Visit<Option<int>>(
+	    x  => { int id = x.EmergeScheduledActivity(_kind, _from, _to);
+		    return new Some<int>(id); },
+	    () => { Debug.LogError("Failed to access game controller!");
+		    return new None<int>(); });
+    }
+
+    //Ask the game controller to create a continuous activity
+    public Option<int> EmergeContinuousActivity(ActivityType _kind)
+    {
+	return controllerGame.Visit<Option<int>>(
+	    x  => { int id = x.EmergeContinuousActivity(_kind);
+		    return new Some<int>(id); },
+	    () => { Debug.LogError("Failed to access game controller!");
+		    return new None<int>(); });
+    }
+
+    //Ask the game to pause
+    public void RequestPause()
+    {
+	controllerGame.Visit<Unit>(
+	    x  => { x.UIRequest("pause");
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access game logic controller!");
+		    return Unit.Instance; });
+    }
+
+    //Ask the game to resume
+    public void RequestResume()
+    {
+	controllerGame.Visit<Unit>(
+	    x  => { x.UIRequest("resume");
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access game logic controller!");
+		    return Unit.Instance; });
+    }
     
     void Awake()
     {
+	//Set up reference to the game logic controller
 	var controllerGameObject = GameObject.FindWithTag("GameController");
 	if(controllerGameObject == null)
 	{
@@ -34,6 +81,7 @@ public class UIController : MonoBehaviour
 	    }
 	}
 
+	//Set up reference to the schedule controller
 	var schedulerComponent = GetComponent<UIScheduler>();
 	if(schedulerComponent == null)
 	{
@@ -44,6 +92,18 @@ public class UIController : MonoBehaviour
             scheduler = new Some<UIScheduler>(schedulerComponent);
         }
 
+	//Set up reference to the event controller
+	var controllerEventComponent = GetComponent<UIEventController>();
+	if(controllerEventComponent == null)
+	{
+	    Debug.LogError("Failed to access event controller component!");
+	}
+	else
+	{
+	    controllerEvent = new Some<UIEventController>(controllerEventComponent);
+	}
+
+	//Set up reference to the day progress slider
 	var sliderDayObject = transform.Find("CanvasMain/SliderDay");
         if(sliderDayObject == null)
         {
@@ -61,127 +121,80 @@ public class UIController : MonoBehaviour
 		sliderDay = new Some<Slider>(sliderDayComponent);
 	    }
         }
-	
-        /*
-        //Arguably the activities list does not need to be an Option
-        var activityDictionary = new Dictionary<int, UIActivity>();
-        if(activityDictionary == null)
-        {
-            Debug.LogError("Failed to instantiate activity dictionary!");
-        }
-        else
-        {
-            activities = new Some<ActivityDict>(activityDictionary);
-        }
-        
-        //AddActivity("human", true);
-        //AddActivity("social", true);
-        //AddActivity("financial", false);
-        */
     }
     
+    void Update()
+    {
+	//Ideally these would be called by the logic component(more of a push architecture)
+	//For now the performance seems to be sufficient anyway
+	UpdateSliderDay();
+
+	controllerGame.Visit<Unit>(
+	    x  => { UpdateActivities(new Some<IDictionary<int, float>>(x.QueryActivityProgress()));
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access game controller!");
+		    return Unit.Instance; });
+	
+	if(dayComplete)
+	{
+	    scheduler.Visit<Unit>(
+		x  => { x.CompleteDay();
+			return Unit.Instance; },
+		() => { Debug.LogError("Failed to access scheduler!");
+			return Unit.Instance; });
+
+	    //Check if an event should be triggered
+	    controllerGame.Visit<Unit>(
+		x  => controllerEvent.Visit<Unit>(
+		y  => { if(x.QueryEvent())
+		        {
+			    y.TriggerEvent("Dummy event description",
+					   false,
+					   true,
+					   new None<ActivityType>());
+		        }
+
+			return Unit.Instance; },
+		() => { Debug.LogError("Failed to access event controller!");
+			return Unit.Instance; }),
+		() => { Debug.LogError("Failed to access game controller!");
+			return Unit.Instance; });
+	    
+	    UpdateActivities(new None<IDictionary<int, float>>());
+	    dayComplete = false;
+	}
+    }
+
     //Update the representation of the daytime slider
     void UpdateSliderDay()
     {
         controllerGame.Visit<Unit>(
-            x  => { sliderDay.Visit<Unit>(
-                        y  => { y.value = x.QueryDayTime() / 24.0f;
-                                return Unit.Instance; },
-                        () => { Debug.LogError("Failed to access day slider!");
-                                return Unit.Instance; }); 
-                    return Unit.Instance;},
+            x  => sliderDay.Visit<Unit>(
+	    y  => { var currentDate = x.QueryDateTime();
+		    if(lastDate.Day < currentDate.Day)
+		    {
+			dayComplete = true;
+			lastDate = currentDate;
+		    }
+		    
+		    y.value = currentDate.Hour / 24.0f;
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access day slider!");
+		    return Unit.Instance; }),
             () => { Debug.LogError ("Failed to access game controller!");
                     return Unit.Instance; });
     }
     
     //Update all activity UI objects
-    void UpdateActivities()
-    {
-	
+    void UpdateActivities(Option<IDictionary<int, float>> _progressDict)
+    {	
+	controllerGame.Visit<Unit>(
+	    x  => scheduler.Visit<Unit>(
+            y  => { y.UpdateActivities(_progressDict);
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access scheduler!");
+		    return Unit.Instance; }),
+	    () => { Debug.LogError("Failed to access game controller!");
+		    return Unit.Instance; });
     }
 }
-
-
-    /*
-    //Add a new activity object to the UI
-    public void AddActivity(int _id, ActivityType _kind, DateTime _startDate, DateTime _endDate, bool _continuous)
-    {
-        activityPrefabs.Visit<Unit>(
-            x => { if(x.ContainsKey(_kind))
-                   {
-                       var uiObject = GameObject.Instantiate(x[_kind], Vector3.zero, Quaternion.identity) as GameObject;
-                       if(uiObject == null)
-                       {
-                           Debug.LogError("Failed to instantiate activity UI object!");
-                           return Unit.Instance;
-                       }
-                       
-                       var uiComponent = uiObject.GetComponent<UIActivity>();
-                       if(uiComponent == null)
-                       {
-                           Debug.LogError("Failed to add UIActivity component!");
-                           return Unit.Instance;
-                       }
-                       
-                       uiComponent.SetMode(_continuous);
-                       
-                       activities.Visit<Unit>(
-                           y => { y.Add(_id, uiComponent);
-                                  return Unit.Instance; },
-                           () => { Debug.LogError("Failed to access activities list!");
-                                   return Unit.Instance; });
-                       
-                       return Unit.Instance;
-                   }
-                   
-                   Debug.LogError("Failed to find activity prefab in dictionary!");
-                   return Unit.Instance;
-                 },
-            () => { Debug.LogError("Failed to access activity prefabs!");
-                    return Unit.Instance; });
-    }
-    */
-    
-    /*
-    //Query an activity's start date
-    public Option<DateTime> QueryStartDate(int _id)
-    {
-        return controllerGame.Visit<Option<DateTime>>(
-            x  => { DateTime startDate = x.QueryStartDate(_id);
-                    if(startDate.Year == 0)
-                    {
-                        Debug.LogError("Failed to query start date; invalid year!");
-                        return new None<DateTime>();
-                    }
-                    return new Some<DateTime>(startDate); },
-            () => { Debug.LogError("Failed to access game controller!");
-                    return new None<DateTime>(); });
-    }
-    
-    
-
-    /*
-        controllerGame.Visit<Unit>(
-            x => { var data = new Dictionary<int, float>(x.QueryActivityProgress());
-                   
-                   activities.Visit<Unit>(
-                       y => { foreach(var entry in data)
-                              {
-                                  if(y.ContainsKey(entry.Key))
-                                  {
-                                      y[entry.Key].SetProgress(entry.Value);
-                                  }
-                                  else
-                                  {
-                                      Debug.LogWarning("Failed to find activity to update!");
-                                  }
-                              }
-                            
-                              return Unit.Instance; },
-                       () => { Debug.LogError("Failed to access activities list!");
-                               return Unit.Instance; });
-                   
-                   return Unit.Instance; },
-            () => { Debug.LogError("Failed to access game controller!");
-                    return Unit.Instance; });
-                    */
