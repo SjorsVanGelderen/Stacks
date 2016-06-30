@@ -19,8 +19,9 @@ public class UIScheduler : MonoBehaviour
     private Option<ContainerDict>             scheduleContainers   = new None<ContainerDict>();
     private Option<List<UIActivityContainer>> previewContainers    = new None<List<UIActivityContainer>>();
     private Option<List<UIActivityContainer>> continuousContainers = new None<List<UIActivityContainer>>();
-    private Option<ActivityType>              activityToSchedule   = new None<ActivityType>();
-    private Option<int>                       daysToSchedule       = new None<int>();
+    private Option<ActivityType>              queuedActivity       = new None<ActivityType>();
+    private Option<int>                       queuedDays           = new None<int>();
+    private bool                              queuedMandatory      = false;
     private ActivitySpriteDict                activitySprites      = new ActivitySpriteDict();
     private DateTime                          time                 = new DateTime(2016, 1, 1);
     
@@ -54,33 +55,33 @@ public class UIScheduler : MonoBehaviour
     //Initiate scheduling process
     public void StartScheduling(ActivityType _kind, int _days, bool _mandatory)
     {
-	activityToSchedule = new Some<ActivityType>(_kind);
-	daysToSchedule     = new Some<int>(_days);
-	
-	if(_mandatory)
-	{
-	    buttonStudio.Visit<Unit>(
-		x  => { x.interactable = false;
-			return Unit.Instance; },
-		() => { Debug.LogError("Failed to access studio button!");
-			return Unit.Instance; });
-	}
+	queuedActivity = new Some<ActivityType>(_kind);
+	queuedDays     = new Some<int>(_days);
+        
+	buttonStudio.Visit<Unit>(
+	    x  => { x.interactable = !_mandatory;
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access studio button!");
+		    return Unit.Instance; });
     }
 
     //Triggered when containers are clicked
     public void ContainerInteraction(DateTime _time)
     {
-	activityToSchedule.Visit<Unit>(
-	    x  => daysToSchedule.Visit<Unit>(
-		y  => { AttemptSchedule(x, y, _time);
-			return Unit.Instance; },
-		() => { Debug.LogError("Failed to access number of days!");
-			return Unit.Instance; }),
-	    () => { return Unit.Instance; });
+	queuedActivity.Visit<Unit>(
+	    x  => queuedDays.Visit<Unit>(
+	    y  => { //Schedule
+	            AttemptSchedule(x, queuedMandatory, y, _time);
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access number of days!");
+		    return Unit.Instance; }),
+	    () => { //Cancel scheduled activity
+		    AttemptCancel(_time);
+		    return Unit.Instance; });
     }
 
     //Update the all activity UI states
-    //Quite messy due to poor planning of the code's internal structure
+    //Quite messy due to poor planning of the code's internal structure(time constraints)
     public void UpdateActivities(Option<IDictionary<int, float>> _progressDict)
     {
 	previewContainers.Visit<Unit>(
@@ -94,6 +95,10 @@ public class UIScheduler : MonoBehaviour
 			    var keyTime = time.AddDays(i - x.Count / 2);
 			    if(y.ContainsKey(keyTime))
 			    {
+				//Set the pie progress in the calendar
+				var progress = (keyTime < time) ? 1 : 0;
+				y[keyTime].SetProgress(progress);
+				
 				//Match the preview container images to those in the schedule
 				x[i].SetSprite(y[keyTime].GetSprite());
 				
@@ -169,8 +174,17 @@ public class UIScheduler : MonoBehaviour
     {
 	time = time.AddDays(1);
     }
-    
-    void Awake()
+
+    //Flush queued activity data
+    public void FlushActivityQueue()
+    {
+	queuedActivity  = new None<ActivityType>();
+	queuedDays      = new None<int>();
+	queuedMandatory = false;
+    }
+
+    //Start because Awake had some problems with components being unavailable
+    void Start()
     {
 	//Set up reference to the game logic controller
 	var controllerUIComponent = GetComponent<UIController>();
@@ -220,10 +234,21 @@ public class UIScheduler : MonoBehaviour
 	}
 	else
 	{
-	    activitySprites.Add(ActivityType.Human,     LoadActivitySprite("human"));
-	    activitySprites.Add(ActivityType.Social,    LoadActivitySprite("social"));
-	    activitySprites.Add(ActivityType.Financial, LoadActivitySprite("financial"));
-	    activitySprites.Add(ActivityType.Job,       LoadActivitySprite("job"));
+	    activitySprites.Add(ActivityType.Human,                  LoadActivitySprite("human"));
+	    activitySprites.Add(ActivityType.Social,                 LoadActivitySprite("social"));
+	    activitySprites.Add(ActivityType.Financial,              LoadActivitySprite("financial"));
+	    activitySprites.Add(ActivityType.Job,                    LoadActivitySprite("job"));
+	    activitySprites.Add(ActivityType.Single,                 LoadActivitySprite("single"));
+	    activitySprites.Add(ActivityType.Album,                  LoadActivitySprite("album"));
+	    activitySprites.Add(ActivityType.Concert,                LoadActivitySprite("concert"));
+	    activitySprites.Add(ActivityType.SocialMedia,            LoadActivitySprite("socialmedia"));
+	    activitySprites.Add(ActivityType.Practice,               LoadActivitySprite("practicemusicalinstrument"));
+	    activitySprites.Add(ActivityType.Photography,            LoadActivitySprite("photography"));
+	    activitySprites.Add(ActivityType.LegalAdvice,            LoadActivitySprite("legaladvice"));
+	    activitySprites.Add(ActivityType.FinancialAdvice,        LoadActivitySprite("financialadvice"));
+	    activitySprites.Add(ActivityType.TargetAudienceResearch, LoadActivitySprite("targetaudienceresearch"));
+	    activitySprites.Add(ActivityType.Vacation,               LoadActivitySprite("vacation"));
+	    activitySprites.Add(ActivityType.Gig,                    LoadActivitySprite("gig"));
 	}
 
 	//Set up schedule preview
@@ -381,7 +406,7 @@ public class UIScheduler : MonoBehaviour
     }
     
     //Attempt to schedule an activity
-    void AttemptSchedule(ActivityType _kind, int _days, DateTime _from)
+    void AttemptSchedule(ActivityType _kind, bool _mandatory, int _days, DateTime _from)
     {
 	scheduleContainers.Visit<Unit>(
 	    x  => controllerUI.Visit<Unit>(
@@ -395,7 +420,7 @@ public class UIScheduler : MonoBehaviour
 		    {
 			if(x.ContainsKey(day))
 			{
-			    if(x[day].Occupied())
+			    if(x[day].GetOccupied())
 			    {
 				return Unit.Instance;
 			    }
@@ -417,7 +442,7 @@ public class UIScheduler : MonoBehaviour
 				    if(activitySprites.ContainsKey(_kind))
 				    {
 					activitySprites[_kind].Visit<Unit>(
-					    w  => { x[day].Occupy(z, w);
+					    w  => { x[day].Occupy(z, _mandatory, w);
 						    return Unit.Instance; },
 					    () => { Debug.LogError("Failed to access activity sprite!");
 						    return Unit.Instance; });
@@ -433,13 +458,63 @@ public class UIScheduler : MonoBehaviour
 				return Unit.Instance; });
 		    
 		    //Scheduling was succesful
-		    activityToSchedule = new None<ActivityType>();
-		    daysToSchedule     = new None<int>();
+		    queuedActivity  = new None<ActivityType>();
+		    queuedDays      = new None<int>();
+		    queuedMandatory = false;
 		    UpdateActivities(new None<IDictionary<int, float>>());
 		    return Unit.Instance; },
 	    () => { Debug.LogError("Failed to access UI controller!");
 		    return Unit.Instance; }),
 	    () => { Debug.LogError("Failed to access container dictionary!");
 	            return Unit.Instance; });
+    }
+
+    //Attempt to cancel a previously scheduled activity
+    void AttemptCancel(DateTime _time)
+    {
+	if(time < _time) //Only future activities may be cancelled
+	{	    
+	    scheduleContainers.Visit<Unit>(
+		x  => controllerUI.Visit<Unit>(
+		y  => { if(x.ContainsKey(_time))
+		        {
+			    if(x[_time].GetMandatory())
+			    {
+				//This activity cannot be canceled
+				return Unit.Instance;
+			    }
+			    
+			    var id = x[_time].GetID();
+
+			    id.Visit<Unit>(
+				z  => { //Find all containers with this ID; inelegant right now
+			                foreach(DateTime day in EachDay(new DateTime(2016, 1, 1), new DateTime(2017, 1, 1)))
+					{
+					    if(x.ContainsKey(day))
+					    {
+						x[day].GetID().Visit<Unit>(
+						    w  => { if(w == z)
+							    {
+								x[day].Free();
+							    }
+							    
+							    return Unit.Instance; },
+						    () => { //Container doesn't hold any activity
+							    return Unit.Instance; });
+					    }
+					}
+					
+					y.CleanseActivity(z);
+				        return Unit.Instance; },
+				() => { //Container doesn't hold an activity to cancel
+				        return Unit.Instance; });
+		        }
+			
+		        return Unit.Instance; },
+		() => { Debug.LogError("Failed to access UI controller!");
+			return Unit.Instance; }),
+		() => { Debug.LogError("Failed to access schedule containers!");
+		        return Unit.Instance; });
+	}
     }
 }

@@ -11,16 +11,19 @@ using ActivityType = Communications.ActivityType;
 public class UIEventController : MonoBehaviour
 {
     private Option<UIController> controllerUI      = new None<UIController>();
+    private Option<UIScheduler>  scheduler         = new None<UIScheduler>();
     private Option<Canvas>       canvasMain        = new None<Canvas>();
+    private Option<Canvas>       canvasSchedule    = new None<Canvas>();
     private Option<Canvas>       canvasEvent       = new None<Canvas>();
     private Option<Text>         textDescription   = new None<Text>();
     private Option<Button>       buttonAccept      = new None<Button>();
     private Option<Button>       buttonDecline     = new None<Button>();
     private Option<Button>       buttonInvestigate = new None<Button>();
-
+    private Option<ActivityType> queuedActivity    = new None<ActivityType>();
+    
     //Trigger an event screen
     public void TriggerEvent(string _description, bool _mandatory, bool _investigable, Option<ActivityType> _kind)
-    {
+    {	
 	canvasMain.Visit<Unit>(
 	    a  => canvasEvent.Visit<Unit>(
 	    b  => textDescription.Visit<Unit>(
@@ -30,16 +33,11 @@ public class UIEventController : MonoBehaviour
 	    f  => { a.enabled      = false;
 		    b.enabled      = true;
 		    c.text         = _description;
-		    //Something with d could be added here
+		    //Functionality requiring 'd' could be added here
 		    e.interactable = !_mandatory;
 		    f.interactable = _investigable;
 		    
-		    //See if there is an associated activity to be scheduled
-		    _kind.Visit<Unit>(
-			x  => //Schedule event here
-			Unit.Instance,
-			() => //Nothing to schedule
-			Unit.Instance);
+		    queuedActivity = _kind;
 		
 	            return Unit.Instance; },
 	    () => { Debug.LogError("Failed to access investigate button!");
@@ -62,23 +60,19 @@ public class UIEventController : MonoBehaviour
 	switch(_whichButton)
 	{
 	case "accept":
-	    //Temporary; switch back to the game screen
 	    controllerUI.Visit<Unit>(
-		x  => canvasMain.Visit<Unit>(
-		y  => canvasEvent.Visit<Unit>(
-		z  => { x.RequestResume();
-			y.enabled = true;
-			z.enabled = false;
+		x  => { x.ProcessEvent();
 			return Unit.Instance; },
 		() => { Debug.LogError("Failed to access UI controller!");
-			return Unit.Instance; }),
-		() => { Debug.LogError("Failed to access event canvas!");
-			return Unit.Instance; }),
-		() => { Debug.LogError("Failed to access main canvas!");
 			return Unit.Instance; });
 	    break;
-
+	    
 	case "decline":
+	    controllerUI.Visit<Unit>(
+		x  => { x.FlushEvent();
+			return Unit.Instance; },
+		() => { Debug.LogError("Failed to access UI controller!");
+			return Unit.Instance; });
 	    break;
 
 	case "investigate":
@@ -88,6 +82,36 @@ public class UIEventController : MonoBehaviour
 	    Debug.LogError("Failed to identify button type for identifier: " + _whichButton + "!");
 	    break;
 	}
+	
+	//If necessary start scheduling the associated activity
+	//Otherwise return to the main studio screen
+	controllerUI.Visit<Unit>(
+	    x  => canvasMain.Visit<Unit>(
+	    y  => canvasEvent.Visit<Unit>(
+	    z  => canvasSchedule.Visit<Unit>(
+	    w  => scheduler.Visit<Unit>(
+	    q  => queuedActivity.Visit<Unit>(
+	    p  => { z.enabled = false;
+	            w.enabled = true;
+		    q.StartScheduling(p, 3, false);
+		    return Unit.Instance; },
+	    () => { x.RequestResume();
+		    y.enabled = true;
+		    z.enabled = false;
+		    return Unit.Instance; }),
+	    () => { Debug.LogError("Failed to access scheduler!");
+		    return Unit.Instance; }),
+	    () => { Debug.LogError("Failed to access schedule canvas!");
+		    return Unit.Instance; }),
+	    () => { Debug.LogError("Failed to access event canvas!");
+		    return Unit.Instance; }),
+	    () => { Debug.LogError("Failed to access main canvas!");
+		    return Unit.Instance; }),
+	    () => { Debug.LogError("Failed to access UI controller!");
+		    return Unit.Instance; });
+	
+	//Flush the queued activity
+	queuedActivity = new None<ActivityType>();
     }
 
     void Awake()
@@ -102,8 +126,19 @@ public class UIEventController : MonoBehaviour
 	{
 	    controllerUI = new Some<UIController>(controllerUIComponent);
 	}
+
+	//Set up reference to the scheduler
+	var schedulerComponent = GetComponent<UIScheduler>();
+	if(schedulerComponent == null)
+	{
+	    Debug.LogError("Failed to access scheduler component!");
+	}
+	else
+	{
+	    scheduler = new Some<UIScheduler>(schedulerComponent);
+	}
 	
-	//Set up references to event UI elements
+	//Set up reference to the main canvas
 	var canvasMainObject = transform.Find("CanvasMain");
 	if(canvasMainObject == null)
 	{
@@ -122,6 +157,26 @@ public class UIEventController : MonoBehaviour
 	    }
 	}
 
+	//Set up reference to the schedule canvas
+	var canvasScheduleObject = transform.Find("CanvasSchedule");
+	if(canvasScheduleObject == null)
+	{
+	    Debug.LogError("Failed to access schedule canvas object!");
+	}
+	else
+	{
+	    var canvasScheduleComponent = canvasScheduleObject.GetComponent<Canvas>();
+	    if(canvasScheduleComponent == null)
+	    {
+		Debug.LogError("Failed to access schedule canvas component!");
+	    }
+	    else
+	    {
+		canvasSchedule = new Some<Canvas>(canvasScheduleComponent);
+	    }
+	}
+
+	//Set up reference to the event canvas
 	var canvasEventObject = transform.Find("CanvasEvent");
 	if(canvasEventObject == null)
 	{
@@ -140,7 +195,8 @@ public class UIEventController : MonoBehaviour
 	    }
 	}
 
-	var textDescriptionObject = transform.Find("CanvasEvent/Panel/TextDescription");
+	//Set up reference to the text description
+	var textDescriptionObject = transform.Find("CanvasEvent/PanelBackground/TextDescription");
 	if(textDescriptionObject == null)
 	{
 	    Debug.LogError("Failed to access text description object!");
@@ -158,7 +214,8 @@ public class UIEventController : MonoBehaviour
 	    }
 	}
 
-	var buttonAcceptObject = transform.Find("CanvasEvent/Panel/ButtonAccept");
+	//Set up reference to the accept button
+	var buttonAcceptObject = transform.Find("CanvasEvent/PanelBackground/PanelButtons/ButtonAccept");
 	if(buttonAcceptObject == null)
 	{
 	    Debug.LogError("Failed to access accept button object!");
@@ -176,7 +233,8 @@ public class UIEventController : MonoBehaviour
 	    }
 	}
 	
-	var buttonDeclineObject = transform.Find("CanvasEvent/Panel/ButtonDecline");
+	//Set up reference to the decline button
+	var buttonDeclineObject = transform.Find("CanvasEvent/PanelBackground/PanelButtons/ButtonDecline");
 	if(buttonDeclineObject == null)
 	{
 	    Debug.LogError("Failed to access decline button object!");
@@ -193,8 +251,10 @@ public class UIEventController : MonoBehaviour
 		buttonDecline = new Some<Button>(buttonDeclineComponent);
 	    }
 	}
+
 	
-	var buttonInvestigateObject = transform.Find("CanvasEvent/Panel/ButtonInvestigate");
+	//Set up reference to the investigate button
+	var buttonInvestigateObject = transform.Find("CanvasEvent/PanelBackground/PanelButtons/ButtonInvestigate");
 	if(buttonInvestigateObject == null)
 	{
 	    Debug.LogError("Failed to access investigate button object!");

@@ -20,6 +20,7 @@ public class UIActivityContainer : MonoBehaviour
     private Option<Image>       image     = new None<Image>();
     private Option<Text>        text      = new None<Text>();
     private Option<UIPie>       pie       = new None<UIPie>();
+    private bool                mandatory = false;
 
     //Various colors for distinguishing between months
     static Color[] monthColors = 
@@ -81,8 +82,14 @@ public class UIActivityContainer : MonoBehaviour
                     return Unit.Instance; });
     }
 
+    //Check whether this container contains a mandatory activity
+    public bool GetMandatory()
+    {
+	return mandatory;
+    }
+    
     //Check whether this container is already occupied by an activity
-    public bool Occupied()
+    public bool GetOccupied()
     {
 	return id.Visit<bool>(
 	    x  => true,
@@ -90,9 +97,10 @@ public class UIActivityContainer : MonoBehaviour
     }
     
     //Schedule an activity inside this container
-    public void Occupy(int _id, Sprite _sprite)
+    public void Occupy(int _id, bool _mandatory, Sprite _sprite)
     {
-	id = new Some<int>(_id);
+	id        = new Some<int>(_id);
+	mandatory = _mandatory;
 	
 	text.Visit<Unit>(
 	    x  => { x.enabled = false;
@@ -110,17 +118,21 @@ public class UIActivityContainer : MonoBehaviour
     //Free this container for a new activity
     public void Free()
     {
-	id = new None<int>();
+	id        = new None<int>();
+	mandatory = false;
 
 	text.Visit<Unit>(
-	    x  => time.Visit<Unit>(
-	        y  => { x.text = y.ToShortDateString();
-		        return Unit.Instance; },
-		() => { Debug.LogError("Failed to access time!");
-		        return Unit.Instance; }),
+	    x  => { x.enabled = true;
+		    return Unit.Instance; },
 	    () => { Debug.LogError("Failed to access text component!");
 		    return Unit.Instance; });
 
+	image.Visit<Unit>(
+	    x  => { x.sprite = null;
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access image component!");
+		    return Unit.Instance; });
+	
 	pie.Visit<Unit>(
 	    x  => { x.SetProgress(0);
 		    return Unit.Instance; },

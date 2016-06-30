@@ -26,6 +26,18 @@ type Product =
           Audience    = List.empty
           Quality     = 0
           BaseIPValue = 0 }
+      
+    static member Single =
+        { Product.Zero with
+            Name        = "Single"
+            Quality     = 10
+            BaseIPValue = 10 }
+      
+    static member Album =
+        { Product.Zero with
+            Name        = "Album"
+            Quality     = 20
+            BaseIPValue = 100 }
 
     static member name =
         { Get = fun (x : Product) -> x.Name
@@ -43,6 +55,7 @@ type Product =
         { Get = fun (x : Product) -> x.BaseIPValue
           Set = fun v (x : Product) -> {x with BaseIPValue = v} }
 
+(*
 type Activity =
     { Name             : string
       TimeInvestment   : int
@@ -82,7 +95,9 @@ type Activity =
     static member continuous =
         { Get = fun (x : Activity) -> x.Continuous
           Set = fun v (x : Activity) -> {x with Continuous = v} }
+*)
 
+(*
 type Event =
     { Name        : string
       Description : string
@@ -110,6 +125,7 @@ type Event =
     static member brandValue =
         { Get = fun (x : Event) -> x.BrandValue
           Set = fun v (x : Event) -> {x with BrandValue = v} }
+*)
 
 type PlayerState =
     { Health    : int
@@ -117,7 +133,8 @@ type PlayerState =
       Financial : int
       Brand     : int
       Expertise : Map<Audience, int>
-      Skills    : Map<Skill, int> } with
+      Skills    : Map<Skill, int>
+      Products  : Product List } with
       
     static member Zero =
       { Health    = 100
@@ -125,7 +142,8 @@ type PlayerState =
         Financial = 1000
         Brand     = 0
         Expertise = Map.empty
-        Skills    = Map.empty }
+        Skills    = Map.empty
+        Products  = List.empty }
 
     static member health =
         { Get = fun (x : PlayerState) -> x.Health

@@ -17,6 +17,7 @@ public class UIController : MonoBehaviour
     private Option<UIScheduler>       scheduler       = new None<UIScheduler>();
     private Option<UIEventController> controllerEvent = new None<UIEventController>();
     private Option<Slider>            sliderDay       = new None<Slider>();
+    private Option<Text>              textPlayer      = new None<Text>();
     private DateTime                  lastDate        = new DateTime(2016, 1, 1);
     private bool                      dayComplete     = false;
     
@@ -26,7 +27,7 @@ public class UIController : MonoBehaviour
 	return controllerGame.Visit<Option<int>>(
 	    x  => { int id = x.EmergeScheduledActivity(_kind, _from, _to);
 		    return new Some<int>(id); },
-	    () => { Debug.LogError("Failed to access game controller!");
+	    () => { Debug.LogError("Failed to access game logic controller!");
 		    return new None<int>(); });
     }
 
@@ -36,8 +37,18 @@ public class UIController : MonoBehaviour
 	return controllerGame.Visit<Option<int>>(
 	    x  => { int id = x.EmergeContinuousActivity(_kind);
 		    return new Some<int>(id); },
-	    () => { Debug.LogError("Failed to access game controller!");
+	    () => { Debug.LogError("Failed to access game logic controller!");
 		    return new None<int>(); });
+    }
+
+    //Ask the game controller to remove a continuous activity
+    public void CleanseActivity(int _id)
+    {
+	controllerGame.Visit<Unit>(
+	    x  => { x.CleanseActivity(_id);
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access game logic controller!");
+		    return Unit.Instance; });
     }
 
     //Ask the game to pause
@@ -55,6 +66,26 @@ public class UIController : MonoBehaviour
     {
 	controllerGame.Visit<Unit>(
 	    x  => { x.UIRequest("resume");
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access game logic controller!");
+		    return Unit.Instance; });
+    }
+    
+    //Ask the game to process and flush event data
+    public void ProcessEvent()
+    {
+	controllerGame.Visit<Unit>(
+	    x  => { x.ProcessEvent();
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access game logic controller!");
+		    return Unit.Instance; });
+    }
+
+    //Ask the game to flush event data
+    public void FlushEvent()
+    {
+	controllerGame.Visit<Unit>(
+	    x  => { x.FlushEvent();
 		    return Unit.Instance; },
 	    () => { Debug.LogError("Failed to access game logic controller!");
 		    return Unit.Instance; });
@@ -121,6 +152,24 @@ public class UIController : MonoBehaviour
 		sliderDay = new Some<Slider>(sliderDayComponent);
 	    }
         }
+
+	var textPlayerObject = transform.Find("CanvasMain/PanelPlayerStatus/TextPlayerStatus");
+	if(textPlayerObject == null)
+	{
+	    Debug.LogError("Failed to access player status text object!");
+	}
+	else
+	{
+	    var textPlayerComponent = textPlayerObject.GetComponent<Text>();
+	    if(textPlayerComponent == null)
+	    {
+		Debug.LogError("Failed to access player status text component!");
+	    }
+	    else
+	    {
+		textPlayer = new Some<Text>(textPlayerComponent);
+	    }
+	}
     }
     
     void Update()
@@ -128,6 +177,7 @@ public class UIController : MonoBehaviour
 	//Ideally these would be called by the logic component(more of a push architecture)
 	//For now the performance seems to be sufficient anyway
 	UpdateSliderDay();
+	UpdatePlayerStatus();
 
 	controllerGame.Visit<Unit>(
 	    x  => { UpdateActivities(new Some<IDictionary<int, float>>(x.QueryActivityProgress()));
@@ -135,7 +185,7 @@ public class UIController : MonoBehaviour
 	    () => { Debug.LogError("Failed to access game controller!");
 		    return Unit.Instance; });
 	
-	if(dayComplete)
+	if(dayComplete) //This might miss, causing an infinite loop of days that never complete, please fix
 	{
 	    scheduler.Visit<Unit>(
 		x  => { x.CompleteDay();
@@ -146,22 +196,40 @@ public class UIController : MonoBehaviour
 	    //Check if an event should be triggered
 	    controllerGame.Visit<Unit>(
 		x  => controllerEvent.Visit<Unit>(
-		y  => { if(x.QueryEvent())
+		y  => { if(x.QueryEvent()) //Request roll for random event
 		        {
-			    y.TriggerEvent("Dummy event description",
-					   false,
-					   true,
-					   new None<ActivityType>());
+			    //Read all event data
+			    string               description    = x.QueryEventDescription();
+			    bool                 mandatory      = x.QueryEventMandatory();
+			    bool                 investigable   = x.QueryEventInvestigable();
+			    ActivityType         activity       = x.QueryEventActivity();
+			    Option<ActivityType> activityOption = new None<ActivityType>();
+			    
+			    if(activity != ActivityType.Default)
+			    {
+				activityOption = new Some<ActivityType>(activity);
+			    }
+			    
+			    y.TriggerEvent(description,
+					   mandatory,
+					   investigable,
+					   activityOption);
 		        }
 
 			return Unit.Instance; },
 		() => { Debug.LogError("Failed to access event controller!");
 			return Unit.Instance; }),
-		() => { Debug.LogError("Failed to access game controller!");
+		() => { Debug.LogError("Failed to access game logic controller!");
 			return Unit.Instance; });
 	    
 	    UpdateActivities(new None<IDictionary<int, float>>());
 	    dayComplete = false;
+	}
+
+	//Temporary escape
+	if(Input.GetKeyDown(KeyCode.Escape))
+	{
+	    Application.Quit();
 	}
     }
 
@@ -177,17 +245,30 @@ public class UIController : MonoBehaviour
 			lastDate = currentDate;
 		    }
 		    
-		    y.value = currentDate.Hour / 24.0f;
+		    y.value = (currentDate.Hour + currentDate.Minute / 60.0f) / 24.0f;
 		    return Unit.Instance; },
 	    () => { Debug.LogError("Failed to access day slider!");
 		    return Unit.Instance; }),
-            () => { Debug.LogError ("Failed to access game controller!");
+            () => { Debug.LogError ("Failed to access game logic controller!");
                     return Unit.Instance; });
+    }
+
+    //Update player status text
+    void UpdatePlayerStatus()
+    {
+	controllerGame.Visit<Unit>(
+	    x  => textPlayer.Visit<Unit>(
+	    y  => { y.text = x.QueryPlayerStatus();
+		    return Unit.Instance; },
+	    () => { Debug.LogError("Failed to access player status text!");
+		    return Unit.Instance; }),
+	    () => { Debug.LogError("Failed to access game logic controller!");
+		    return Unit.Instance; });
     }
     
     //Update all activity UI objects
     void UpdateActivities(Option<IDictionary<int, float>> _progressDict)
-    {	
+    {
 	controllerGame.Visit<Unit>(
 	    x  => scheduler.Visit<Unit>(
             y  => { y.UpdateActivities(_progressDict);

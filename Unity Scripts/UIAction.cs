@@ -8,8 +8,9 @@ using ActivityType = Communications.ActivityType;
 
 public class UIAction : MonoBehaviour
 {
-    public ActivityType kind = ActivityType.Default;
-    public int days = 1;
+    public ActivityType kind      = ActivityType.Default;
+    public int          days      = 1;
+    public bool         mandatory = false;
     
     private Option<UIScheduler> scheduler = new None<UIScheduler>();
 

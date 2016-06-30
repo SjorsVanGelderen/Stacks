@@ -14,11 +14,22 @@ type ID = int
 
 //Identifiers for any activity, enumerated because it's used in a C# switch elsewhere
 type ActivityType =
-    | Default   = 0
-    | Human     = 1
-    | Social    = 2
-    | Financial = 3
-    | Job       = 4
+    | Default                = 0
+    | Human                  = 1
+    | Social                 = 2
+    | Financial              = 3
+    | Job                    = 4
+    | Single                 = 5
+    | Album                  = 6
+    | Concert                = 7
+    | SocialMedia            = 8
+    | Practice               = 9
+    | Photography            = 10
+    | LegalAdvice            = 11
+    | FinancialAdvice        = 12
+    | TargetAudienceResearch = 13
+    | Vacation               = 14
+    | Gig                    = 15
 
 //Activities can be scheduled or continuous
 type ActivityMode =
@@ -32,7 +43,7 @@ type Mail =
     | CompleteDay
     | ElapseTime       of double //In days
     | AddActivity      of ID * ActivityType * ActivityMode
-    | RemoveActivity   of string
+    | RemoveActivity   of ID
     | PauseActivity    of string
     | ResumeActivity   of string
     | CompleteActivity of string
@@ -42,6 +53,7 @@ type Mail =
     | AffectBrand      of int
     | AffectExpertise  of Audience * int
     | AffectSkills     of Skill * int
+    | AddProduct       of Product
 
 //A collection of communication units
 type Mailbox =
@@ -66,7 +78,7 @@ type Mailbox =
         { mailbox with Contents = Map.add id <| List.filter predicate mails <| mailbox.Contents }
 
     static member Replace mailbox id mails =
-        Map.add id mails mailbox.Contents
+        { mailbox with Contents = Map.add id mails mailbox.Contents }
 
     static member Access mailbox id =
         match Map.tryFind id mailbox.Contents with
