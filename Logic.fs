@@ -254,12 +254,13 @@ and PlayerFields =
 
                  let state', mails' = List.fold (fun ((state : PlayerState), acc) mail ->
                      match mail with
-                     | AffectHealth    change  -> ({ state with Health    = System.Math.Max(0, state.Health    + change) }, acc)
-                     | AffectEnergy    change  -> ({ state with Energy    = System.Math.Max(0, state.Energy    + change) }, acc)
-                     | AffectFinancial change  -> ({ state with Financial = System.Math.Max(0, state.Financial + change) }, acc)
-                     | AffectBrand     change  -> ({ state with Brand     = System.Math.Max(0, state.Brand     + change) }, acc)
+                     | AffectHealth    change  -> ({ state with Health    = Math.Max(0, Math.Min(state.Health + change, 100)) }, acc)
+                     | AffectEnergy    change  -> ({ state with Energy    = Math.Max(0, Math.Min(state.Energy + change, 100)) }, acc)
+                     | AffectFinancial change  -> ({ state with Financial = Math.Max(0, state.Financial + change) }, acc)
+                     | AffectBrand     change  -> ({ state with Brand     = Math.Max(0, state.Brand     + change) }, acc)
                      | AffectExpertise _       -> (state, acc)
-                     | AffectSkills    _       -> (state, acc)
+                     | AffectSkill     change  -> ({ state with Skill     = Math.Max(0, state.Skill     + change) }, acc)
+                     //| AffectSkills    _       -> (state, acc)
                      | AddProduct      product -> ({ state with Products = product :: state.Products }, acc)
                      | _                       -> (state, mail :: acc)) (fs.State, []) mails
 
@@ -293,19 +294,56 @@ and ActivityFields =
     static member Human =
         { ActivityFields.Zero with
             Kind    = ActivityType.Human
-            Effects = [ AffectEnergy -5
-                        (* Should have some effect on skill? *) ] }
+            Effects = [ AffectEnergy -1
+                        AffectSkill  5 ] }
     
+    static member Practice =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.Practice
+            Effects = [ AffectEnergy -10
+                        AffectSkill  20 ] }
+    
+    static member Lessons =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.Lessons
+            Effects = [ AffectEnergy    -20
+                        AffectFinancial -100
+                        AffectSkill     60] }
+    
+    static member Analysis =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.Analysis
+            Effects = [ AffectEnergy    -10
+                        AffectSkill     30] }
+
     static member Social =
         { ActivityFields.Zero with
             Kind    = ActivityType.Social
-            Effects = [ AffectEnergy -3
-                        AffectBrand  10 ] }
+            Effects = [ AffectEnergy -1
+                        AffectBrand  5 ] }
+    
+    static member SocialMedia =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.SocialMedia
+            Effects = [ AffectEnergy    -10
+                        AffectBrand     100 ] }
+    
+    static member NetworkLunch =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.NetworkLunch
+            Effects = [ AffectEnergy    -20
+                        AffectBrand     200 ] }
+    
+    static member ColdCall =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.ColdCall
+            Effects = [ AffectEnergy    -10
+                        AffectBrand     150 ] }
     
     static member Financial =
         { ActivityFields.Zero with
             Kind    = ActivityType.Financial
-            Effects = [ AffectEnergy    -5
+            Effects = [ AffectEnergy    -1
                         AffectFinancial 10 ] }
     
     static member Job =
@@ -330,6 +368,13 @@ and ActivityFields =
                         AffectFinancial -120
                         AddProduct      Product.Album ] }
     
+    static member Gig =
+        { ActivityFields.Zero with
+            Kind    = ActivityType.Gig
+            Effects = [ AffectHealth    -10
+                        AffectBrand     100
+                        AffectFinancial 100 ] }
+    
     static member Concert =
         { ActivityFields.Zero with
             Kind    = ActivityType.Concert
@@ -338,45 +383,11 @@ and ActivityFields =
                         AffectBrand     120
                         AffectFinancial 200 ] }
     
-    static member SocialMedia =
+    static member DayOff =
         { ActivityFields.Zero with
-            Kind    = ActivityType.SocialMedia
-            Effects = [ AffectEnergy    -10
-                        AffectBrand     100 ] }
-    
-    static member Practice =
-        { ActivityFields.Zero with
-            Kind    = ActivityType.Practice
-            Effects = [ AffectEnergy    -10
-                        AffectBrand     15
-                        AffectFinancial -10
-                        (* Affects skills *) ] }
-    
-    static member Photography =
-        { ActivityFields.Zero with
-            Kind    = ActivityType.Photography
-            Effects = [ AffectEnergy    -10
-                        AffectBrand      30
-                        (* Affects skills *) ] }
-    
-    static member LegalAdvice =
-        { ActivityFields.Zero with
-            Kind    = ActivityType.LegalAdvice
-            Effects = [ AffectEnergy    -10
-                        AffectFinancial 50 ] }
-    
-    static member FinancialAdvice =
-        { ActivityFields.Zero with
-            Kind    = ActivityType.FinancialAdvice
-            Effects = [ AffectEnergy    -10
-                        AffectFinancial 50 ] }
-    
-    static member TargetAudienceResearch =
-        { ActivityFields.Zero with
-            Kind    = ActivityType.TargetAudienceResearch
-            Effects = [ AffectEnergy    -20
-                        AffectBrand     30
-                        AffectFinancial 100 ] }
+            Kind    = ActivityType.DayOff
+            Effects = [ AffectHealth    50
+                        AffectEnergy    75 ] }
     
     static member Vacation =
         { ActivityFields.Zero with
@@ -384,13 +395,6 @@ and ActivityFields =
             Effects = [ AffectHealth    100
                         AffectEnergy    100
                         AffectFinancial -200 ] }
-    
-    static member Gig =
-        { ActivityFields.Zero with
-            Kind    = ActivityType.Gig
-            Effects = [ AffectHealth    -10
-                        AffectBrand     100
-                        AffectFinancial 100 ] }
     
     static member Rules =
         [ fun w fs dt -> fs ]
@@ -485,12 +489,29 @@ and Event =
               Effects      = [ AffectFinancial -300 ]
               Activity     = None }
 
+    static member NegativeReview =
+        { Event.Zero with
+              Name         = "Negative review"
+              Description  = "A famous blogger wrote a negative review of your latest song!"
+              Investigable = true
+              Effects      = [ AffectBrand -30 ]
+              Activity     = None }
+
     static member Plagiarism =
         { Event.Zero with
               Name        = "Plagiarism"
-              Description = "Someone is plagiarising your work!"
+              Description = "An artist is plagiarising your work!"
               Mandatory   = true
               Effects     = [ AffectFinancial -100 ]
+              Activity    = None }
+
+    static member PlagiarismClaim =
+        { Event.Zero with
+              Name        = "Plagiarism"
+              Description = "An artist claims you are plagiarising their work!"
+              Mandatory   = true
+              Effects     = [ AffectFinancial -100
+                              AffectBrand     -10 ]
               Activity    = None }
 
     static member Illness =
@@ -504,10 +525,28 @@ and Event =
     static member Gig =
         { Event.Zero with
               Name        = "Gig"
-              Description = "The local pub asks you to play a gig for three days."
+              Description = "The local pub asks you to play a gig for three days!"
               Mandatory   = true
-              Effects     = []
+              Effects     = List.empty
               Activity    = Some ActivityType.Gig }
+
+    static member CommercialJingle =
+        { Event.Zero with
+              Name        = "Commercial jingle"
+              Description = "A local company wants to use your music as a jingle for their commercial!"
+              Mandatory   = true
+              Effects     = [ AffectFinancial 500
+                              AffectBrand     100 ]
+              Activity    = None }
+
+    static member ProductionAssistance =
+        { Event.Zero with
+              Name        = "Production assistance"
+              Description = "You are asked to work on a production, but they are not willing to pay!"
+              Mandatory   = true
+              Effects     = [ AffectSkill 50
+                              AffectBrand 100 ]
+              Activity    = None }
 
     static member Rules =
         [ fun w fs dt -> fs ]
@@ -550,11 +589,15 @@ and State =
         { Timer      = Timer.Create  (TimerFields.Zero,  TimerFields.Rules,  TimerFields.Scripts)
           Player     = Player.Create (PlayerFields.Zero, PlayerFields.Rules, PlayerFields.Scripts)
           Activities = List.empty
-          Events     = [ //Event.RecordDealGood
-                         //Event.RecordDealBad
-                         //Event.Plagiarism
-                         //Event.Illness
-                         Event.Gig ]
+          Events     = [ Event.RecordDealGood
+                         Event.RecordDealBad
+                         Event.NegativeReview
+                         Event.Plagiarism
+                         Event.PlagiarismClaim
+                         Event.Illness
+                         Event.Gig
+                         Event.CommercialJingle
+                         Event.ProductionAssistance ]
           Paused     = false
           Mailbox    = Mailbox.Zero
           ExitFlag   = false
@@ -608,21 +651,23 @@ and State =
 
         let getFields kind : ActivityFields Option =
             match kind with
-            | ActivityType.Default                -> Some ActivityFields.Zero
-            | ActivityType.Human                  -> Some ActivityFields.Human
-            | ActivityType.Social                 -> Some ActivityFields.Social
-            | ActivityType.Financial              -> Some ActivityFields.Financial
-            | ActivityType.Job                    -> Some ActivityFields.Job
-            | ActivityType.Single                 -> Some ActivityFields.Single
-            | ActivityType.Album                  -> Some ActivityFields.Album
-            | ActivityType.Concert                -> Some ActivityFields.Concert
-            | ActivityType.Photography            -> Some ActivityFields.Photography
-            | ActivityType.LegalAdvice            -> Some ActivityFields.LegalAdvice
-            | ActivityType.FinancialAdvice        -> Some ActivityFields.FinancialAdvice
-            | ActivityType.TargetAudienceResearch -> Some ActivityFields.TargetAudienceResearch
-            | ActivityType.Vacation               -> Some ActivityFields.Vacation
-            | ActivityType.Practice               -> Some ActivityFields.Practice
-            | ActivityType.Gig                    -> Some ActivityFields.Gig
+            | ActivityType.Default      -> Some ActivityFields.Zero
+            | ActivityType.Human        -> Some ActivityFields.Human
+            | ActivityType.Practice     -> Some ActivityFields.Practice
+            | ActivityType.Lessons      -> Some ActivityFields.Lessons
+            | ActivityType.Analysis     -> Some ActivityFields.Analysis
+            | ActivityType.Social       -> Some ActivityFields.Social
+            | ActivityType.SocialMedia  -> Some ActivityFields.SocialMedia
+            | ActivityType.NetworkLunch -> Some ActivityFields.NetworkLunch
+            | ActivityType.ColdCall     -> Some ActivityFields.ColdCall
+            | ActivityType.Financial    -> Some ActivityFields.Financial
+            | ActivityType.Job          -> Some ActivityFields.Job
+            | ActivityType.Single       -> Some ActivityFields.Single
+            | ActivityType.Album        -> Some ActivityFields.Album
+            | ActivityType.Gig          -> Some ActivityFields.Gig
+            | ActivityType.Concert      -> Some ActivityFields.Concert
+            | ActivityType.DayOff       -> Some ActivityFields.DayOff
+            | ActivityType.Vacation     -> Some ActivityFields.Vacation
             | _ -> Debug.LogError <| "Failed to match activity type: " + kind.ToString() + "!"; None
         
         let getActivity id mode fields =

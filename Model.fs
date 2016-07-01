@@ -55,85 +55,14 @@ type Product =
         { Get = fun (x : Product) -> x.BaseIPValue
           Set = fun v (x : Product) -> {x with BaseIPValue = v} }
 
-(*
-type Activity =
-    { Name             : string
-      TimeInvestment   : int
-      EnergyInvestment : int
-      HealthInvestment : int
-      Product          : Product Option
-      Continuous       : bool } with
-      
-    static member Zero =
-        { Name             = "Unnamed activity"
-          TimeInvestment   = 0
-          EnergyInvestment = 0
-          HealthInvestment = 0
-          Product          = None
-          Continuous       = false }
-
-    static member name =
-        { Get = fun (x : Activity) -> x.Name
-          Set = fun v (x : Activity) -> {x with Name = v} }
-
-    static member timeInvestment =
-        { Get = fun (x : Activity) -> x.TimeInvestment
-          Set = fun v (x : Activity) -> {x with TimeInvestment = v} }
-
-    static member energyInvestment =
-        { Get = fun (x : Activity) -> x.EnergyInvestment
-          Set = fun v (x : Activity) -> {x with EnergyInvestment = v} }
-
-    static member healthInvestment =
-        { Get = fun (x : Activity) -> x.HealthInvestment
-          Set = fun v (x : Activity) -> {x with HealthInvestment = v} }
-
-    static member product =
-        { Get = fun (x : Activity) -> x.Product
-          Set = fun v (x : Activity) -> {x with Product = v} }
-
-    static member continuous =
-        { Get = fun (x : Activity) -> x.Continuous
-          Set = fun v (x : Activity) -> {x with Continuous = v} }
-*)
-
-(*
-type Event =
-    { Name        : string
-      Description : string
-      Activity    : Activity
-      BrandValue  : int } with
-      
-    static member Zero =
-        { Name        = "Unnamed event"
-          Description = "No description"
-          Activity    = Activity.Zero
-          BrandValue  = 0 }
-
-    static member name =
-        { Get = fun (x : Event) -> x.Name
-          Set = fun v (x : Event) -> {x with Name = v} }
-
-    static member description =
-        { Get = fun (x : Event) -> x.Description
-          Set = fun v (x : Event) -> {x with Description = v} }
-
-    static member activity =
-        { Get = fun (x : Event) -> x.Activity
-          Set = fun v (x : Event) -> {x with Activity = v} }
-
-    static member brandValue =
-        { Get = fun (x : Event) -> x.BrandValue
-          Set = fun v (x : Event) -> {x with BrandValue = v} }
-*)
-
 type PlayerState =
     { Health    : int
       Energy    : int
       Financial : int
       Brand     : int
       Expertise : Map<Audience, int>
-      Skills    : Map<Skill, int>
+      //Skills    : Map<Skill, int>
+      Skill     : int
       Products  : Product List } with
       
     static member Zero =
@@ -142,7 +71,8 @@ type PlayerState =
         Financial = 1000
         Brand     = 0
         Expertise = Map.empty
-        Skills    = Map.empty
+        //Skills    = Map.empty
+        Skill     = 0
         Products  = List.empty }
 
     static member health =
@@ -165,6 +95,10 @@ type PlayerState =
         { Get = fun (x : PlayerState) -> x.Expertise
           Set = fun v (x : PlayerState) -> {x with Expertise = v} }
 
-    static member skills =
+    static member skill =
+        { Get = fun (x : PlayerState) -> x.Skill
+          Set = fun v (x : PlayerState) -> {x with Skill = v} }
+
+    (*static member skills =
         { Get = fun (x : PlayerState) -> x.Skills
-          Set = fun v (x : PlayerState) -> {x with Skills = v} }
+          Set = fun v (x : PlayerState) -> {x with Skills = v} }*)

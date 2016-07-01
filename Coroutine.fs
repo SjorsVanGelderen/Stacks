@@ -4,7 +4,7 @@
 
 module Coroutine
 
-open UnityEngine
+//open UnityEngine
 
 //Factorizes objects and recomposes them, f3 is not used by any routines
 type Factorization<'f, 'f1, 'f2, 'f3> =

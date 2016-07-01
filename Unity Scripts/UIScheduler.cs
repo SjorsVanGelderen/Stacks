@@ -234,21 +234,22 @@ public class UIScheduler : MonoBehaviour
 	}
 	else
 	{
-	    activitySprites.Add(ActivityType.Human,                  LoadActivitySprite("human"));
-	    activitySprites.Add(ActivityType.Social,                 LoadActivitySprite("social"));
-	    activitySprites.Add(ActivityType.Financial,              LoadActivitySprite("financial"));
-	    activitySprites.Add(ActivityType.Job,                    LoadActivitySprite("job"));
-	    activitySprites.Add(ActivityType.Single,                 LoadActivitySprite("single"));
-	    activitySprites.Add(ActivityType.Album,                  LoadActivitySprite("album"));
-	    activitySprites.Add(ActivityType.Concert,                LoadActivitySprite("concert"));
-	    activitySprites.Add(ActivityType.SocialMedia,            LoadActivitySprite("socialmedia"));
-	    activitySprites.Add(ActivityType.Practice,               LoadActivitySprite("practicemusicalinstrument"));
-	    activitySprites.Add(ActivityType.Photography,            LoadActivitySprite("photography"));
-	    activitySprites.Add(ActivityType.LegalAdvice,            LoadActivitySprite("legaladvice"));
-	    activitySprites.Add(ActivityType.FinancialAdvice,        LoadActivitySprite("financialadvice"));
-	    activitySprites.Add(ActivityType.TargetAudienceResearch, LoadActivitySprite("targetaudienceresearch"));
-	    activitySprites.Add(ActivityType.Vacation,               LoadActivitySprite("vacation"));
-	    activitySprites.Add(ActivityType.Gig,                    LoadActivitySprite("gig"));
+	    activitySprites.Add(ActivityType.Human,        LoadActivitySprite("human"));
+	    activitySprites.Add(ActivityType.Practice,     LoadActivitySprite("practice"));
+	    activitySprites.Add(ActivityType.Lessons,      LoadActivitySprite("lessons"));
+	    activitySprites.Add(ActivityType.Analysis,     LoadActivitySprite("analysis"));
+	    activitySprites.Add(ActivityType.Social,       LoadActivitySprite("social"));
+	    activitySprites.Add(ActivityType.SocialMedia,  LoadActivitySprite("socialmedia"));
+	    activitySprites.Add(ActivityType.NetworkLunch, LoadActivitySprite("networklunch"));
+	    activitySprites.Add(ActivityType.ColdCall,     LoadActivitySprite("coldcall"));
+	    activitySprites.Add(ActivityType.Financial,    LoadActivitySprite("financial"));
+	    activitySprites.Add(ActivityType.Job,          LoadActivitySprite("job"));
+	    activitySprites.Add(ActivityType.Single,       LoadActivitySprite("single"));
+	    activitySprites.Add(ActivityType.Album,        LoadActivitySprite("album"));
+	    activitySprites.Add(ActivityType.Gig,          LoadActivitySprite("gig"));
+	    activitySprites.Add(ActivityType.Concert,      LoadActivitySprite("concert"));
+	    activitySprites.Add(ActivityType.DayOff,       LoadActivitySprite("dayoff"));
+	    activitySprites.Add(ActivityType.Vacation,     LoadActivitySprite("vacation"));
 	}
 
 	//Set up schedule preview
@@ -330,18 +331,15 @@ public class UIScheduler : MonoBehaviour
 			Debug.LogError("Failed to access activity sprites!");
 		    }
 		    else
-		    {
-			if(x.Count >= 3)
-			{
-			    foreach(var entry in x)
-			    {
-				entry.SetID(y.EmergeContinuousActivity(entry.kind));
-				if(activitySprites.ContainsKey(entry.kind))
-				{
-				    entry.SetSprite(activitySprites[entry.kind]);
-				}
-			    }
-			}
+		    {                        
+                        foreach(var entry in x)
+                        {
+                            entry.SetID(y.EmergeContinuousActivity(entry.kind));
+                            if(activitySprites.ContainsKey(entry.kind))
+                            {
+                                entry.SetSprite(activitySprites[entry.kind]);
+                            }
+                        }
 		    }
 		    
 		    return Unit.Instance; },
@@ -440,7 +438,7 @@ public class UIScheduler : MonoBehaviour
 			z  => { foreach(DateTime day in EachDay(_from, _from.AddDays(_days)))
 		                {
 				    if(activitySprites.ContainsKey(_kind))
-				    {
+				    {                                        
 					activitySprites[_kind].Visit<Unit>(
 					    w  => { x[day].Occupy(z, _mandatory, w);
 						    return Unit.Instance; },

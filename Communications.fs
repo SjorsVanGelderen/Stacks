@@ -14,22 +14,23 @@ type ID = int
 
 //Identifiers for any activity, enumerated because it's used in a C# switch elsewhere
 type ActivityType =
-    | Default                = 0
-    | Human                  = 1
-    | Social                 = 2
-    | Financial              = 3
-    | Job                    = 4
-    | Single                 = 5
-    | Album                  = 6
-    | Concert                = 7
-    | SocialMedia            = 8
-    | Practice               = 9
-    | Photography            = 10
-    | LegalAdvice            = 11
-    | FinancialAdvice        = 12
-    | TargetAudienceResearch = 13
-    | Vacation               = 14
-    | Gig                    = 15
+    | Default      = 0
+    | Human        = 1
+    | Practice     = 2
+    | Lessons      = 3
+    | Analysis     = 4
+    | Social       = 5
+    | SocialMedia  = 6
+    | NetworkLunch = 7
+    | ColdCall     = 8
+    | Financial    = 9
+    | Job          = 10
+    | Single       = 11
+    | Album        = 12
+    | Gig          = 13
+    | Concert      = 14
+    | DayOff       = 15
+    | Vacation     = 16
 
 //Activities can be scheduled or continuous
 type ActivityMode =
@@ -52,7 +53,8 @@ type Mail =
     | AffectEnergy     of int
     | AffectBrand      of int
     | AffectExpertise  of Audience * int
-    | AffectSkills     of Skill * int
+    //| AffectSkills     of Skill * int
+    | AffectSkill      of int
     | AddProduct       of Product
 
 //A collection of communication units
