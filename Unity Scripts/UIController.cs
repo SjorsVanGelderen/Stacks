@@ -17,6 +17,7 @@ public class UIController : MonoBehaviour
     private Option<UIScheduler>       scheduler       = new None<UIScheduler>();
     private Option<UIEventController> controllerEvent = new None<UIEventController>();
     private Option<Slider>            sliderDay       = new None<Slider>();
+    private Option<Text>              textDate        = new None<Text>();
     private Option<Text>              textPlayer      = new None<Text>();
     private DateTime                  lastDate        = new DateTime(2016, 1, 1);
     private bool                      dayComplete     = false;
@@ -50,7 +51,25 @@ public class UIController : MonoBehaviour
 	    () => { Debug.LogError("Failed to access game logic controller!");
 		    return Unit.Instance; });
     }
-
+    
+    //Ask the game to tell us the start date of a given activity
+    public DateTime QueryActivityStartDate(int _id)
+    {
+        return controllerGame.Visit<DateTime>(
+            x  => x.QueryActivityStartDate(_id),
+            () => { Debug.LogError("Failed to access game logic controller! Using dummy date!");
+                    return new DateTime(2016, 1, 1); });
+    }
+    
+    //Ask the game to tell us the end date of a given activity
+    public DateTime QueryActivityEndDate(int _id)
+    {
+        return controllerGame.Visit<DateTime>(
+            x  => x.QueryActivityEndDate(_id),
+            () => { Debug.LogError("Failed to access game logic controller! Using dummy date!");
+                    return new DateTime(2016, 1, 1); });
+    }
+    
     //Ask the game to pause
     public void RequestPause()
     {
@@ -134,6 +153,25 @@ public class UIController : MonoBehaviour
 	    controllerEvent = new Some<UIEventController>(controllerEventComponent);
 	}
 
+        //Set up reference to the date text object
+        var textDateObject = transform.Find("CanvasMain/TextDate");
+        if(textDateObject == null)
+        {
+            Debug.LogError("Failed to access date text object!");
+        }
+        else
+        {
+            var textDateComponent = textDateObject.GetComponent<Text>();
+            if(textDateComponent == null)
+            {
+                Debug.LogError("Failed to access date text component!");
+            }
+            else
+            {
+                textDate = new Some<Text>(textDateComponent);
+            }
+        }
+        
 	//Set up reference to the day progress slider
 	var sliderDayObject = transform.Find("CanvasMain/SliderDay");
         if(sliderDayObject == null)
@@ -176,7 +214,15 @@ public class UIController : MonoBehaviour
     {
 	//Ideally these would be called by the logic component(more of a push architecture)
 	//For now the performance seems to be sufficient anyway
-	UpdateSliderDay();
+
+        if(lastDate >= (new DateTime(2017, 1, 1)).AddDays(-1))
+        {
+            //End of the year, stop updating
+            //Not tested
+            return;
+        }
+        
+	UpdateDate();
 	UpdatePlayerStatus();
 
 	controllerGame.Visit<Unit>(
@@ -186,13 +232,13 @@ public class UIController : MonoBehaviour
 		    return Unit.Instance; });
 	
 	if(dayComplete) //This might miss, causing an infinite loop of days that never complete, please fix
-	{
+	{            
 	    scheduler.Visit<Unit>(
 		x  => { x.CompleteDay();
 			return Unit.Instance; },
 		() => { Debug.LogError("Failed to access scheduler!");
 			return Unit.Instance; });
-
+            
 	    //Check if an event should be triggered
 	    controllerGame.Visit<Unit>(
 		x  => controllerEvent.Visit<Unit>(
@@ -234,22 +280,33 @@ public class UIController : MonoBehaviour
     }
 
     //Update the representation of the daytime slider
-    void UpdateSliderDay()
+    void UpdateDate()
     {
         controllerGame.Visit<Unit>(
-            x  => sliderDay.Visit<Unit>(
-	    y  => { var currentDate = x.QueryDateTime();
-		    if(lastDate.Day < currentDate.Day)
+            x  => textDate.Visit<Unit>(
+            y  => sliderDay.Visit<Unit>(
+	    z  => { var currentDate = x.QueryDateTime();
+                    if(currentDate.Year > 2016)
+                    {
+                        //End of the year, stop updating
+                        //Not tested
+                        return Unit.Instance;
+                    }
+                    
+		    if(lastDate.Day < currentDate.Day || lastDate.Month < currentDate.Month)
 		    {
-			dayComplete = true;
-			lastDate = currentDate;
+                        y.text      = currentDate.ToShortDateString();
+			lastDate    = currentDate;
+                        dayComplete = true;
 		    }
 		    
-		    y.value = (currentDate.Hour + currentDate.Minute / 60.0f) / 24.0f;
+		    z.value = (currentDate.Hour + currentDate.Minute / 60.0f) / 24.0f;
 		    return Unit.Instance; },
 	    () => { Debug.LogError("Failed to access day slider!");
 		    return Unit.Instance; }),
-            () => { Debug.LogError ("Failed to access game logic controller!");
+            () => { Debug.LogError("Failed to access date text!");
+                    return Unit.Instance; }),
+            () => { Debug.LogError("Failed to access game logic controller!");
                     return Unit.Instance; });
     }
 

@@ -11,7 +11,22 @@ public class UIPauseController : MonoBehaviour
     private Option<UIController> controllerUI = new None<UIController>();
     private Option<Text>         text         = new None<Text>();
     private Option<Transform>    textPaused   = new None<Transform>();
-    private bool                 pause        = true;
+    private bool                 pause        = false;
+    
+    //Reset the button status
+    public void Reset()
+    {
+        text.Visit<Unit>(
+            x  => textPaused.Visit<Unit>(
+            y  => { pause  = true;
+                    x.text = "Pause";
+                    y.gameObject.SetActive(false);
+                    return Unit.Instance; },
+            () => { Debug.LogError("Failed to access paused text object!");
+                    return Unit.Instance; }),
+            () => { Debug.LogError("Failed to access text component!");
+                    return Unit.Instance; });
+    }
     
     //Associated button was clicked, toggle pause state
     public void PokePauseController()

@@ -76,6 +76,36 @@ type MonacoLogic () =
             [] state.Activities
             |> Map.ofList |> Map.toSeq |> dict
     
+    //Get the date from which an activity will start
+    member this.QueryActivityStartDate id : DateTime =
+        let dateOption =
+            List.tryPick (fun (elem : Activity) ->
+                if elem.Fields.ID = id then
+                    match elem.Fields.Mode with
+                    | Scheduled (from, _) -> Some from
+                    | _                   -> None
+                else
+                    None) state.Activities
+        
+        match dateOption with
+        | Some date -> date
+        | None      -> Debug.LogError("Failed to access activity start date!"); new DateTime(2016, 1, 1);
+
+    //Get the date until which an activity will last
+    member this.QueryActivityEndDate id : DateTime =
+        let dateOption =
+            List.tryPick (fun (elem : Activity) ->
+                if elem.Fields.ID = id then
+                    match elem.Fields.Mode with
+                    | Scheduled (_, until) -> Some until
+                    | _                    -> None
+                else
+                    None) state.Activities
+        
+        match dateOption with
+        | Some date -> date
+        | None      -> Debug.LogError("Failed to access activity end date!"); new DateTime(2016, 1, 1);
+
     //Get the game time
     member this.QueryDateTime () =
         state.Timer.Fields.DateTime
@@ -166,7 +196,7 @@ type MonacoLogic () =
             event <- None //Flush the event after processing
         | None   ->
             Debug.LogError <| "Failed to process event; none set!"
-
+    
 //Global entity structure
 and Entity<'w, 'fs, 'mailbox> =
     { Fields  : 'fs
@@ -300,20 +330,20 @@ and ActivityFields =
     static member Practice =
         { ActivityFields.Zero with
             Kind    = ActivityType.Practice
-            Effects = [ AffectEnergy -10
+            Effects = [ AffectEnergy -1
                         AffectSkill  20 ] }
     
     static member Lessons =
         { ActivityFields.Zero with
             Kind    = ActivityType.Lessons
-            Effects = [ AffectEnergy    -20
+            Effects = [ AffectEnergy    -3
                         AffectFinancial -100
                         AffectSkill     60] }
     
     static member Analysis =
         { ActivityFields.Zero with
             Kind    = ActivityType.Analysis
-            Effects = [ AffectEnergy    -10
+            Effects = [ AffectEnergy    -3
                         AffectSkill     30] }
 
     static member Social =
@@ -325,19 +355,19 @@ and ActivityFields =
     static member SocialMedia =
         { ActivityFields.Zero with
             Kind    = ActivityType.SocialMedia
-            Effects = [ AffectEnergy    -10
+            Effects = [ AffectEnergy    -2
                         AffectBrand     100 ] }
     
     static member NetworkLunch =
         { ActivityFields.Zero with
             Kind    = ActivityType.NetworkLunch
-            Effects = [ AffectEnergy    -20
+            Effects = [ AffectEnergy    -1
                         AffectBrand     200 ] }
     
     static member ColdCall =
         { ActivityFields.Zero with
             Kind    = ActivityType.ColdCall
-            Effects = [ AffectEnergy    -10
+            Effects = [ AffectEnergy    -2
                         AffectBrand     150 ] }
     
     static member Financial =
@@ -349,13 +379,13 @@ and ActivityFields =
     static member Job =
         { ActivityFields.Zero with
             Kind    = ActivityType.Job
-            Effects = [ AffectEnergy    -10
+            Effects = [ AffectEnergy    -3
                         AffectFinancial 100 ] }
     
     static member Single =
         { ActivityFields.Zero with
             Kind    = ActivityType.Single
-            Effects = [ AffectEnergy    -15
+            Effects = [ AffectEnergy    -3
                         AffectBrand     15
                         AffectFinancial -50
                         AddProduct      Product.Single ] }
@@ -363,7 +393,7 @@ and ActivityFields =
     static member Album =
         { ActivityFields.Zero with
             Kind    = ActivityType.Album
-            Effects = [ AffectEnergy    -20
+            Effects = [ AffectEnergy    -5
                         AffectBrand     50
                         AffectFinancial -120
                         AddProduct      Product.Album ] }
@@ -371,14 +401,14 @@ and ActivityFields =
     static member Gig =
         { ActivityFields.Zero with
             Kind    = ActivityType.Gig
-            Effects = [ AffectHealth    -10
+            Effects = [ AffectHealth    -2
                         AffectBrand     100
                         AffectFinancial 100 ] }
     
     static member Concert =
         { ActivityFields.Zero with
             Kind    = ActivityType.Concert
-            Effects = [ AffectEnergy    -30
+            Effects = [ AffectEnergy    -5
                         AffectHealth    -10
                         AffectBrand     120
                         AffectFinancial 200 ] }
@@ -386,8 +416,8 @@ and ActivityFields =
     static member DayOff =
         { ActivityFields.Zero with
             Kind    = ActivityType.DayOff
-            Effects = [ AffectHealth    50
-                        AffectEnergy    75 ] }
+            Effects = [ AffectHealth    30
+                        AffectEnergy    40 ] }
     
     static member Vacation =
         { ActivityFields.Zero with
@@ -598,7 +628,7 @@ and State =
                          Event.Gig
                          Event.CommercialJingle
                          Event.ProductionAssistance ]
-          Paused     = false
+          Paused     = true
           Mailbox    = Mailbox.Zero
           ExitFlag   = false
           Prefabs    = Map.empty }

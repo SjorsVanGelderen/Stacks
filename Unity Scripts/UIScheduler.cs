@@ -471,7 +471,7 @@ public class UIScheduler : MonoBehaviour
     void AttemptCancel(DateTime _time)
     {
 	if(time < _time) //Only future activities may be cancelled
-	{	    
+	{
 	    scheduleContainers.Visit<Unit>(
 		x  => controllerUI.Visit<Unit>(
 		y  => { if(x.ContainsKey(_time))
@@ -485,7 +485,15 @@ public class UIScheduler : MonoBehaviour
 			    var id = x[_time].GetID();
 
 			    id.Visit<Unit>(
-				z  => { //Find all containers with this ID; inelegant right now
+				z  => { DateTime startDate = y.QueryActivityStartDate(z);
+                                        DateTime endDate   = y.QueryActivityEndDate(z);
+                                        if(time >= startDate && time < endDate)
+                                        {
+                                            //This activity is currently active, and can no longer be cancelled
+                                            return Unit.Instance;
+                                        }
+                                        
+                                        //Find all containers with this ID; inelegant right now
 			                foreach(DateTime day in EachDay(new DateTime(2016, 1, 1), new DateTime(2017, 1, 1)))
 					{
 					    if(x.ContainsKey(day))
