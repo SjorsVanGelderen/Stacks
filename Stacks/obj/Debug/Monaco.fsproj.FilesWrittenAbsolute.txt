@@ -1,0 +1,8 @@
+/home/sjors/Projects/Internship/Monaco/bin/Debug/Monaco.dll.mdb
+/home/sjors/Projects/Internship/Monaco/bin/Debug/Monaco.dll
+/home/sjors/Projects/Internship/Monaco/obj/Debug/Monaco.dll
+/home/sjors/Projects/Internship/Monaco/obj/Debug/Monaco.dll.mdb
+/home/sjors/Projects/Internship/Monaco/bin/Debug/UnityEngine.dll
+/home/sjors/Projects/Internship/Monaco/bin/Debug/Lidgren.Network.dll
+/home/sjors/Projects/Internship/Monaco/bin/Debug/mscorlib.dll
+/home/sjors/Projects/Internship/Monaco/bin/Debug/FSharp.Core.dll

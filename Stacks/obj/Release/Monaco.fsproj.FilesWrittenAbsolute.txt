@@ -1,0 +1,6 @@
+/home/sjors/Projects/Internship/Stacks/bin/Release/mscorlib.dll
+/home/sjors/Projects/Internship/Stacks/bin/Release/FSharp.Core.dll
+/home/sjors/Projects/Internship/Stacks/bin/Release/UnityEngine.UI.dll
+/home/sjors/Projects/Internship/Stacks/bin/Release/UnityEngine.dll
+/home/sjors/Projects/Internship/Stacks/bin/Release/Monaco.dll
+/home/sjors/Projects/Internship/Stacks/obj/Release/Monaco.dll
